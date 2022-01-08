@@ -137,11 +137,11 @@ class MirageDB
         await this.pgdb.query("\
         CREATE TABLE IF NOT EXISTS images \
         ( \
-            imageid INT NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY \
-            normalHash BYTEA \
-            perceptualHash BYTEA \
-            path TEXT \
-            tags TEXT ARRAY \
+            imageid INT NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY, \
+            normalHash BYTEA UNIQUE, \
+            perceptualHash BYTEA, \
+            path TEXT, \
+            tags TSVECTOR \
         ); \
         ");
 
