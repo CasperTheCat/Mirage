@@ -78,20 +78,30 @@
 
 	// Also, fetch temporary images
 	onMount(async () => {
-		let blob: JSON = await fetch('/api/images').then(r => r.json());
-		if ("uimg" in blob)
+		let blob: JSON = await fetch('/api/board/1/images').then(r => r.json());
+		if ("images" in blob)
 		{
-			photos = blob["uimg"];
+			let fetchable = blob["images"];
+
+			photos = blob["images"];
 		}
+
+		console.log(photos);
+
+		
+
+
 
 		photos.sort((a,b) => {
-			return b["height"] - a["height"];
+			let r1 = a["height"] / a["width"];
+			let r2 = b["height"] / b["width"];
+			return r2 - r1;
 		});
 
-		if (photos.length > 20)
-		{
-			photos = photos.slice(0, 20);
-		}
+		// if (photos.length > 20)
+		// {
+		// 	photos = photos.slice(0, 20);
+		// }
 
 
 

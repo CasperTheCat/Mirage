@@ -7,14 +7,15 @@
 //     idleTimeoutMillis: 30000
 // });
 
+import type path from "path";
 import pgPromise from "pg-promise";
 import pkg from 'pg-promise';
 const { PreparedStatement } = pkg;
 
 // Declare PG
 const config = {
-    user: process.env.PGUSER || "postgres",
-    password: process.env.PGUSER || "postgres",
+    user: process.env.PGUSER || "mirage",
+    password: process.env.PGPASS || "postgres",
     host: process.env.PGHOST || "localhost",
     port: parseInt( process.env.PGPORT || "5432", 10 ),
     database: process.env.PGDATABASE || "mirage"
@@ -22,7 +23,7 @@ const config = {
 
 class MirageDB 
 {
-    pgdb = pgPromise()(config);
+    pgdb;
     PSGetAuthByUsername = new PreparedStatement(
         {
             name: "PSGetAuthByUsername",
@@ -61,7 +62,7 @@ class MirageDB
     PSGetBoardsByUID = new PreparedStatement(
         {
             name: "PSGetBoardReferencesByUID",
-            text: " SELECT boards.* FROM boards, user_board WHERE boards.boardid = user_board.boardid AND user_board.ownerid = $1"
+            text: "SELECT boards.* FROM boards, user_board WHERE boards.boardid = user_board.boardid AND user_board.ownerid = $1"
         }
     );
 
@@ -79,11 +80,42 @@ class MirageDB
         }
     );
 
+    PSGetImageByHash = new PreparedStatement(
+        {
+            name: "PSGetImageByHash",
+            text: "SELECT * FROM images WHERE normalhash = $1"
+        }
+    );
+
+    PSGetImageByTag = new PreparedStatement(
+        {
+            name: "PSGetImageByTag",
+            text: "SELECT * FROM images WHERE tags @@ to_tsquery($1)"
+        }
+    );
+
+    // TODO: This needs to handle getting images and returning many from this
+    PSGetImagesByBoard = new PreparedStatement(
+        {
+            name: "PSGetImagesByBoard",
+            text: "SELECT images.* FROM images, boards WHERE images.imageid = ANY(boards.imageids) AND boards.boardid = $1"
+        }
+    );
 
 
-    // constructor()
-    // {
-    // }
+
+    constructor()
+    {
+        try
+        {
+            this.pgdb = pgPromise()(config);
+        }
+        catch (Err)
+        {
+            console.log("DEAD");
+            throw Err;
+        }
+    }
 
     async ClearDB()
     {
@@ -97,6 +129,8 @@ class MirageDB
             await this.pgdb.query("DROP TABLE IF EXISTS boards");
             console.log("[WARN] Dropped Table 'boards'");
             await this.pgdb.query("DROP TABLE IF EXISTS auth;");
+            console.log("[WARN] Dropped Table 'auth'");
+            await this.pgdb.query("DROP TABLE IF EXISTS images;");
             console.log("[WARN] Dropped Table 'auth'");
 
         }
@@ -140,13 +174,15 @@ class MirageDB
             imageid INT NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY, \
             normalHash BYTEA UNIQUE, \
             perceptualHash BYTEA, \
+            width INT, \
+            height INT, \
             path TEXT, \
             tags TSVECTOR \
         ); \
         ");
 
         await this.pgdb.query("\
-        CREATE INDEX ind_tag_image ON images USING GIN (tags);\
+        CREATE INDEX IF NOT EXISTS ind_tag_image ON images USING GIN (tags);\
         ");
 
 
@@ -158,7 +194,7 @@ class MirageDB
             ( \
                 boardid INT NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY, \
                 boardname VARCHAR, \
-                boardurls VARCHAR ARRAY \
+                imageids INT ARRAY \
             ); \
         ");
 
@@ -195,6 +231,48 @@ class MirageDB
     {
         console.log("[INFO] PSGetBoardsByUID")
         return this.pgdb.manyOrNone(this.PSGetBoardsByUID, [uid]);
+    }
+
+    async GetImageByHash(hash: Buffer)
+    {
+        return this.pgdb.one(this.PSGetImageByHash, [hash]);
+    }
+
+    async GetImageByTag(tags: string)
+    {
+        return this.pgdb.manyOrNone(this.PSGetImageByTag, [tags]);
+    }
+
+    async GetImagesByBoard(boarduid: number)
+    {
+        return this.pgdb.manyOrNone(this.PSGetImagesByBoard, [boarduid]);
+    }
+
+    
+
+    async AddImage(hash: Buffer, perceptualHash: Buffer, width: number, height: number, loadPath: string, tags: string)
+    {
+        console.log(hash);
+        try
+        {
+            let res = await this.pgdb.one("INSERT INTO images (normalHash, perceptualHash, width, height, path, tags) VALUES ($1, $2, $3, $4, $5, $6) RETURNING imageid;", [
+                hash, 
+                perceptualHash,
+                width,
+                height,
+                loadPath,
+                tags
+            ]
+            );
+          
+
+            return true;
+        }
+        catch (Exception)
+        {
+            console.log(Exception);
+            return false;
+        }
     }
 
     async AddUser(username: string, salt, key, displayname: string = "")

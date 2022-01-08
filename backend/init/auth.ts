@@ -12,13 +12,8 @@ async function InitAuthStrat(dbinst: MirageDB)
         {
             let user = await dbinst.GetAuthByUsername(username);
 
-            console.log("FLIGHT");
-
-            console.log(typeof(cb));
-
             if(user)
             {
-                console.log(user);
                 let saltbuffer = user.salt;
 
                 let pwinput = crypto.pbkdf2Sync(password, saltbuffer, PBKDF2ROUNDS, PBKDF2SIZE, PBKDF2ALGO);
@@ -30,7 +25,7 @@ async function InitAuthStrat(dbinst: MirageDB)
                         userid: user.userid
                     };
 
-                    console.log("Logged");
+                    console.log(`[INFO] Login succeeded for ${username}`);
 
                     return cb(null, resUser);
                 }

@@ -14,10 +14,11 @@ async function InitDB(db: MirageDB, shouldDestroy: boolean = false)
         await db.InitialiseAuth();
         await db.InitialiseUsers();
         await db.InitialiseBoards();
+        await db.InitialiseImages();
     }
     catch (Err)
     {
-        console.log(Err);
+        throw Err;
     }
 };
 
