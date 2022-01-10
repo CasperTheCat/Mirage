@@ -7,7 +7,7 @@
   "scripts": {
     "build": "rollup -c",
     "dev": "rollup -c -w",
-    "b2": "tsc && rollup -c",
+    "b2": "tsc; rollup -c",
     "start": "node build/mirage.js",
     "s2": "tsc && rollup -c && node build/mirage.js",
     "d2": "rollup -c -w && tsc -w && nodemon build/mirage.js",
@@ -15,9 +15,9 @@
     "clean": "gts clean",
     "compile": "tsc",
     "fix": "gts fix",
-    "prepare": "npm.cmd run compile",
-    "pretest": "npm.cmd run compile",
-    "posttest": "npm.cmd run lint",
+    "prepare": "npm run compile",
+    "pretest": "npm run compile",
+    "posttest": "npm run lint",
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
@@ -30,7 +30,9 @@
     "@types/express": "^4.17.13",
     "@types/express-session": "^1.17.4",
     "@types/node": "^14.11.2",
+    "@types/passport": "^1.0.7",
     "@types/pg-promise": "^5.4.3",
+    "@types/sharp": "^0.29.5",
     "gts": "^3.1.0",
     "nodemon": "^2.0.15",
     "rollup": "^2.3.4",
@@ -51,6 +53,7 @@
     "express-session": "^1.17.2",
     "passport": "^0.5.0",
     "passport-local": "^1.0.0",
-    "pg-promise": "^10.11.1"
+    "pg-promise": "^10.11.1",
+    "sharp": "^0.29.3"
   }
 }

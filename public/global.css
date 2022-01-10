@@ -37,6 +37,14 @@ h1 {
 	font-display: swap;
 }
 
+.headStyle
+{
+	color: #ff3e00;
+	font-weight: 100;
+	font-family: 'Bebas Neue', 'Flow Circular', 'Roboto', sans-serif;
+	font-display: swap;
+}
+
 .nomargin
 {
 	margin: 0;

@@ -87,10 +87,94 @@ class MirageDB
         }
     );
 
+    PSGetImageByHashShort = new PreparedStatement(
+        {
+            name: "PSGetImageByHashShort",
+            text: "SELECT height, width, normalhash FROM images WHERE live = true AND normalhash = $1"
+        }
+    );
+
+    PSGetImagePathByHash = new PreparedStatement(
+        {
+            name: "PSGetImagePathByHash",
+            text: "SELECT path FROM images WHERE normalhash = $1"
+        }
+    );
+
+    PSGetImageTagsByHash = new PreparedStatement(
+        {
+            name: "PSGetImageTagsByHash",
+            text: "SELECT tags FROM images WHERE normalhash = $1"
+        }
+    );
+
     PSGetImageByTag = new PreparedStatement(
         {
             name: "PSGetImageByTag",
-            text: "SELECT * FROM images WHERE tags @@ to_tsquery($1)"
+            text: "SELECT * FROM images WHERE live = true AND tags @@ $1::tsquery"
+        }
+    );
+
+    PSGetImageByTagShort = new PreparedStatement(
+        {
+            name: "PSGetImageByTagShort",
+            text: "SELECT height, width, normalhash FROM images WHERE live = true AND tags @@ $1::tsquery"
+        }
+    );
+
+    PSUpdateImageLocationByID = new PreparedStatement(
+        {
+            name: "PSUpdateImageLocationByID",
+            text: "UPDATE images SET path = $2::text, live = true::boolean WHERE imageid = $1"
+        }
+    );
+
+    PSUpdateImageTagsByID = new PreparedStatement(
+        {
+            name: "PSUpdateImageTagsByID",
+            text: "UPDATE images SET tags = $2::tsvector WHERE imageid = $1"
+        }
+    );
+
+    PSUpdateImageTagsByHash = new PreparedStatement(
+        {
+            name: "PSUpdateImageTagsByHash",
+            text: "UPDATE images SET tags = $2::tsvector WHERE normalhash = $1"
+        }
+    );
+
+    PSGetAllImages = new PreparedStatement(
+        {
+            name: "PSGetAllImages",
+            text: "SELECT * FROM images WHERE live = true"
+        }
+    );
+
+    PSGetAllImagesShort = new PreparedStatement(
+        {
+            name: "PSGetAllImagesShort",
+            text: "SELECT height, width, normalhash FROM images WHERE live = true"
+        }
+    );
+
+    PSGetAllImagesMark = new PreparedStatement(
+        {
+            name: "PSGetAllImagesMark",
+            text: "SELECT imageid, path FROM images WHERE live = true"
+        }
+    );
+
+    PSMarkImageDeletedByID = new PreparedStatement(
+        {
+            name: "PSMarkImageDeletedByID",
+            text: "UPDATE images SET live = false::boolean WHERE imageid = $1"
+        }
+    );
+
+    PSMarkImageLiveByID = new PreparedStatement(
+        {
+            name: "PSMarkImageLiveByID",
+            text: "UPDATE images SET live = true::boolean WHERE imageid = $1"
         }
     );
 
@@ -98,10 +182,32 @@ class MirageDB
     PSGetImagesByBoard = new PreparedStatement(
         {
             name: "PSGetImagesByBoard",
-            text: "SELECT images.* FROM images, boards WHERE images.imageid = ANY(boards.imageids) AND boards.boardid = $1"
+            text: "SELECT images.* FROM images, boards WHERE images.live = true AND images.imageid = ANY(boards.imageids) AND boards.boardid = $1"
         }
     );
 
+    PSGetImagesByBoardShort = new PreparedStatement(
+        {
+            name: "PSGetImagesByBoardShort",
+            text: "SELECT images.width, images.height, images.normalhash FROM images, boards WHERE images.live = true AND images.imageid = ANY(boards.imageids) AND boards.boardid = $1"
+        }
+    );
+
+    PSGetImageCount = new PreparedStatement(
+        {
+            name: "PSGetImageCount",
+            text: "SELECT COUNT(imageid) FROM images WHERE live = true"
+        }
+    );
+
+    PSGetUntaggedImages = new PreparedStatement(
+        {
+            name: "PSGetUntaggedImages",
+            text: "SELECT height, width, normalhash FROM images WHERE live = true AND tags = ''"
+        }
+    );
+
+    
 
 
     constructor()
@@ -177,7 +283,8 @@ class MirageDB
             width INT, \
             height INT, \
             path TEXT, \
-            tags TSVECTOR \
+            tags TSVECTOR, \
+            live BOOLEAN DEFAULT TRUE NOT NULL \
         ); \
         ");
 
@@ -209,38 +316,87 @@ class MirageDB
 
     async GetAuthByUsername(username: string)
     {
-        return this.pgdb.one(this.PSGetAuthByUsername, [username]);
+        return this.pgdb.oneOrNone(this.PSGetAuthByUsername, [username]);
     }
 
     async GetAuthByUID(uid: number)
     {
-        return this.pgdb.one(this.PSGetAuthByUID, [uid]);
+        return this.pgdb.oneOrNone(this.PSGetAuthByUID, [uid]);
     }
 
     async GetUserByUsername(username: string)
     {
-        return this.pgdb.one(this.PSGetUserByUsername, [username]);
+        return this.pgdb.oneOrNone(this.PSGetUserByUsername, [username]);
     }
 
     async GetUserByUID(uid: number)
     {
-        return this.pgdb.one(this.PSGetUserByUID, [uid]);
+        return this.pgdb.oneOrNone(this.PSGetUserByUID, [uid]);
     }
 
     async GetBoardsByUID(uid: number)
     {
-        console.log("[INFO] PSGetBoardsByUID")
         return this.pgdb.manyOrNone(this.PSGetBoardsByUID, [uid]);
     }
 
     async GetImageByHash(hash: Buffer)
     {
-        return this.pgdb.one(this.PSGetImageByHash, [hash]);
+        return this.pgdb.oneOrNone(this.PSGetImageByHash, [hash]);
+    }
+
+    async GetImageByHashShort(hash: Buffer)
+    {
+        return this.pgdb.oneOrNone(this.PSGetImageByHashShort, [hash]);
+    }
+
+    async GetImagePathByHash(hash: Buffer)
+    {
+        return this.pgdb.oneOrNone(this.PSGetImagePathByHash, [hash]);
+    }
+
+    async GetImageTagsByHash(hash: Buffer)
+    {
+        return this.pgdb.oneOrNone(this.PSGetImageTagsByHash, [hash]);
     }
 
     async GetImageByTag(tags: string)
     {
-        return this.pgdb.manyOrNone(this.PSGetImageByTag, [tags]);
+        return this.pgdb.manyOrNone(this.PSGetImageByTag, [tags.toLowerCase()]);
+    }
+
+    async GetImageByTagShort(tags: string)
+    {
+        return this.pgdb.manyOrNone(this.PSGetImageByTagShort, [tags.toLowerCase()]);
+    }
+
+    async GetAllImages()
+    {
+        return this.pgdb.manyOrNone(this.PSGetAllImages, []);
+    }
+
+    async GetAllImagesShort()
+    {
+        return this.pgdb.manyOrNone(this.PSGetAllImagesShort, []);
+    }
+
+    async GetAllImagesMark()
+    {
+        return this.pgdb.manyOrNone(this.PSGetAllImagesMark, []);
+    }
+
+    async UpdateImageLocationByID(identifier: number, relPath: string)
+    {
+        return this.pgdb.none(this.PSUpdateImageLocationByID, [identifier, relPath]);
+    }
+
+    async UpdateImageTagsByID(identifier: number, tags: string)
+    {
+        return this.pgdb.none(this.PSUpdateImageTagsByID, [identifier, tags]);
+    }
+
+    async UpdateImageTagsByHash(hash: Buffer, tags: string)
+    {
+        return this.pgdb.none(this.PSUpdateImageTagsByHash, [hash, tags]);
     }
 
     async GetImagesByBoard(boarduid: number)
@@ -248,7 +404,30 @@ class MirageDB
         return this.pgdb.manyOrNone(this.PSGetImagesByBoard, [boarduid]);
     }
 
+    async GetImagesByBoardShort(boarduid: number)
+    {
+        return this.pgdb.manyOrNone(this.PSGetImagesByBoardShort, [boarduid]);
+    }
     
+    async MarkImageDeleted(imageid:number)
+    {
+        return this.pgdb.none(this.PSMarkImageDeletedByID, [imageid]);
+    }
+
+    async MarkImageLive(imageid:number)
+    {
+        return this.pgdb.none(this.PSMarkImageLiveByID, [imageid]);
+    }
+
+    async GetImageCount()
+    {
+        return this.pgdb.one(this.PSGetImageCount, []);
+    }
+    
+    async GetUntaggedImages()
+    {
+        return this.pgdb.manyOrNone(this.PSGetUntaggedImages, []);
+    }
 
     async AddImage(hash: Buffer, perceptualHash: Buffer, width: number, height: number, loadPath: string, tags: string)
     {

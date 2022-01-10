@@ -9,7 +9,7 @@
 
 async function getBoardsForUser(req, res, db)
 {
-    console.log("Request for user " + req.user.toString());
+    console.log("[INFO] Request for user " + req.user.toString());
     try
     {
         let boardList = await db.GetBoardsByUID(req.user);
@@ -30,11 +30,10 @@ async function getBoardsForUser(req, res, db)
 
 async function getUserInfo(req, res, db)
 {
-    console.log("Requesting User Data for user " + req.user.toString());
+    console.log("[INFO] Requesting User Data for user " + req.user.toString());
     try
     {
         let userData = await db.GetUserByUID(req.user);
-        console.log(userData);
 
         userData = JSON.stringify(userData);
 

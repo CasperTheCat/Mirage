@@ -110,7 +110,7 @@ async function InitAuthStrat(dbinst: MirageDB)
 
 
     // Directly from https://github.com/passport/express-4.x-local-example/blob/master/boot/auth.js
-    passport.serializeUser(function(user, cb)
+    passport.serializeUser(function(user: any, cb)
         {
             return cb(null, user.userid);
         // process.nextTick(function() {
