@@ -118,7 +118,14 @@ async function CheckFolder(check: string, db: MirageDB, root: string, imageList:
 
                 // Get prelimary tags
                 const tagList = rlpath.split("/").slice(0, -1);
-                let prelimTags = tagList.join(" ").toLowerCase();
+                let cleanTags: string[] = [];
+
+                for (let uncleanTag of tagList)
+                {
+                    cleanTags.push(SanitiseTag(uncleanTag))
+                }
+
+                let prelimTags = cleanTags.join(" ");
 
                 let result = await db.GetImageByHash(imageHash);
 
@@ -187,4 +194,14 @@ async function IngestImageFromPath(root: string, relpath: string, db: MirageDB)
     db.AddImage(normalhash, Buffer.from(""), width, height, relpath, "");
 }
 
-export {IngestImageFromPath, CheckFolder, DiscardOrMark};
+function SanitiseTag(tag: string)
+{
+    let temp = tag.toLowerCase();
+    temp = temp.replace(/[.,\/#!$%\^&\*;:{}=\-_`\'\"~()]/g,"");
+    temp = temp.replace(/\s{2,}/g," ");
+
+    return temp;
+}
+
+
+export {IngestImageFromPath, CheckFolder, DiscardOrMark, SanitiseTag};

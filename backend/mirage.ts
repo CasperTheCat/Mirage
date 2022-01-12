@@ -10,7 +10,7 @@ import {InsertNewUserToDB} from "./auth.js";
 import bodyParser from 'body-parser';
 import session from 'express-session';
 import { readFile } from "fs/promises";
-import { IngestImageFromPath, CheckFolder, DiscardOrMark } from "./imageHandler.js";
+import { IngestImageFromPath, CheckFolder, DiscardOrMark, SanitiseTag } from "./imageHandler.js";
 import {InitDB} from "./init/db.js";
 import {InitAuthStrat} from "./init/auth.js";
 
@@ -299,7 +299,7 @@ async function entry()
                         if (pair.length === 2)
                         {
                             let oldTag: string = pair[0];
-                            let newTag: string = pair[1];
+                            let newTag: string = SanitiseTag(pair[1]);                            
 
                             mirageDB.RenameTag(oldTag, newTag);
                         }
@@ -361,12 +361,8 @@ async function entry()
                 resarray = resarray.filter(e => e);
 
                 for (let i = 0; i < resarray.length; ++i)
-                {
-                    let temp = resarray[i].toLowerCase();
-                    temp.replace(/[.,\/#!$%\^&\*;:{}=\-_`\'\"~()]/g,"");
-                    temp.replace(/\s{2,}/g," ");
-                    
-                    resarray[i] = `'${temp}'`;
+                {                   
+                    resarray[i] = `'${SanitiseTag(resarray[i])}'`;
                 }
                 let newTags = resarray.join(" ");
                 //let x = await mirageDB.GetImageTagsByHash(y);
