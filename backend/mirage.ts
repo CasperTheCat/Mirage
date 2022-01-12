@@ -236,6 +236,34 @@ async function entry()
         }
     );
 
+    app.post('/api/image/tag/count',  bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let results:number[] = [];
+                let tags: string[] = req.body;
+                for (let tag of tags)
+                {
+                    let countOfTag = await mirageDB.GetImageCountByTag(tag);
+                    if ("count" in countOfTag)
+                    {
+                        results.push(countOfTag["count"]);
+                    }
+                }
+                
+
+                res.status(200).send(JSON.stringify(results));
+
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(500).send("{ \"code\": 0, \"reason\": \"Exception\" }");
+            }
+        }
+    );
+
     app.post('/api/image/tag/delete',  bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
         async (req, res) => 
         {

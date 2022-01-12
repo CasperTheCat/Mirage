@@ -15,9 +15,10 @@
 	let listedModalY: number = 0;
 	let listedHash: string = "";
 	let selectedTagControl: string = undefined;
+	let selectedTagCount: number = 0;
 	let selectedNewTagName: string = undefined;
 	let confirmationAction: Function = undefined;
-	let oldPageState: number = undefined;
+	//let oldPageState: number = undefined;
 
 	export let name: string;
 	let loggedIn: boolean = false;
@@ -43,9 +44,12 @@
 	const EState_SearchView = 3;
 	const EState_TagUntagView = 4;
 	const EState_TagManView = 5;
-	const EState_Confirm = 6;
+
+	const EStateModal_Normal = 0;
+	const EStateModal_Confirm = 1;
 
 	let PageState = EState_FrontPage;
+	let ModalState = EStateModal_Normal;
 
 	let KeyStateLive:boolean = false;
 
@@ -78,7 +82,7 @@
 		try 
 		{
 			await SwitchToSearchView();
-			TagSearchString = selectedTagControl !== undefined ? selectedTagControl : "";
+			TagSearchString = selectedTagControl !== undefined ? `'${selectedTagControl}'` : "";
 			await ExecuteSearch();
 		}
 		catch (Exception)
@@ -135,7 +139,8 @@
 			}
 
 			// We want to go back
-			PageState = oldPageState;
+			//PageState = oldPageState;
+			ModalState = EStateModal_Normal;
 
 			// Make sure
 			showModal = false;
@@ -155,15 +160,22 @@
 			confirmationAction = undefined;
 		}
 
-		PageState = oldPageState;
+		//PageState = oldPageState;
+		ModalState = EStateModal_Normal;
+	}
+
+	async function ShowConfirmModal()
+	{
+		ModalState = EStateModal_Confirm;
 	}
 
 	async function HandleWantDeleteTag()
 	{
 		// Store function
 		confirmationAction = HandleDeleteTag;
-		oldPageState = PageState;
-		PageState = EState_Confirm;
+		//oldPageState = PageState;
+		//PageState = EState_Confirm;
+		ShowConfirmModal();
 	}
 
 	async function HandleDeleteTag()
@@ -198,8 +210,40 @@
 	{
 		// Store function
 		confirmationAction = HandleRenameTag;
-		oldPageState = PageState;
-		PageState = EState_Confirm;
+		//oldPageState = PageState;
+		//PageState = EState_Confirm;
+		ShowConfirmModal();
+	}
+
+	async function GetTagCount(tagList: string[])
+	{
+		try
+		{
+			let fetchable = await fetch('/api/image/tag/count',
+				{
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json;charset=utf-8'
+					},
+					body: JSON.stringify(tagList)
+				});
+
+			// fetchable is an array
+			let blob: number[] = await fetchable.json();
+			if (blob.length === tagList.length)
+			{
+				return blob;
+			}
+			else
+			{
+				console.log("GetTagCount?");
+				return [];
+			}
+		}
+		catch (Exception)
+		{
+			throw Exception;
+		}
 	}
 
 	async function HandleRenameTag()
@@ -250,7 +294,6 @@
 
 	async function HandleTagControlSummon(event)
 	{
-		console.log(event.detail);
 		try
 		{
 			if (globalAllTags.length === 0)
@@ -271,9 +314,16 @@
 			listedModalY = event.detail.y;// - (innerHeight / 2);
 
 			selectedTagControl = event.detail.tag;
+			let tagCounts = await GetTagCount([event.detail.tag]);
+			if(tagCounts.length > 0)
+			{
+				selectedTagCount = tagCounts[0];
+				console.log(selectedTagCount);
+			}
 
 			if (selectedTagControl !== undefined)
 			{
+				ModalState = EStateModal_Normal;
 				showModal = true;
 				selectedNewTagName = selectedTagControl;
 				ForcedScrollToModal();
@@ -316,6 +366,7 @@
 			editTagString = listedTags.join("\n");
 			listedHash = event.detail.hash;
 
+			ModalState = EStateModal_Normal;
 			showModal = true;
 			ForcedScrollToModal();
 		}
@@ -779,23 +830,24 @@
 </main>
 
 {#if showModal}
-	{#if PageState === EState_TagManView}
-		<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>
-			<h2 slot="header">
-				Edit Tag: {selectedTagControl}
-			</h2>
-			<textarea bind:value={selectedNewTagName} rows="1"></textarea>
-			<button on:click={HandleViewTag}>View Tag</button>
-			<button on:click={HandleWantDeleteTag}>Delete Tag</button>
-			<button on:click={HandleWantRenameTag}>Rename Tag</button>
-		</Modal>
-	{:else if PageState === EState_Confirm}
+	{#if PageState === EState_TagManView && ModalState === EStateModal_Confirm}
 		<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>
 			<h2 slot="header">
 				Confirm?
 			</h2>
 			<button on:click={HandleCancelledAction}>Cancel</button>
 			<button on:click={HandleConfirmedAction}>Proceed</button>
+		</Modal>
+	{:else if PageState === EState_TagManView}
+		<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>
+			<h2 slot="header">
+				Edit Tag: {selectedTagControl}
+			</h2>
+			<p>Applied to {selectedTagCount} { selectedTagCount == 1 ? "entry" : "entries"}</p>
+			<textarea bind:value={selectedNewTagName} rows="1"></textarea>
+			<button on:click={HandleViewTag}>View Tag</button>
+			<button on:click={HandleWantDeleteTag}>Delete Tag</button>
+			<button on:click={HandleWantRenameTag}>Rename Tag</button>
 		</Modal>
 	{:else}
 		<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>

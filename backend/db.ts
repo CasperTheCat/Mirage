@@ -215,6 +215,13 @@ class MirageDB
         }
     );
 
+    PSGetImageCountByTag = new PreparedStatement(
+        {
+            name: "PSGetImageCountByTag",
+            text: "SELECT COUNT(imageid) FROM images WHERE live = true AND tags @@ $1::tsquery"
+        }
+    );
+
     PSGetUntaggedImages = new PreparedStatement(
         {
             name: "PSGetUntaggedImages",
@@ -453,6 +460,12 @@ class MirageDB
     {
         return this.pgdb.one(this.PSGetImageCount, []);
     }
+
+    async GetImageCountByTag(tag: string)
+    {
+        return this.pgdb.one(this.PSGetImageCountByTag, [tag]);
+    }
+    
     
     async GetUntaggedImages()
     {
