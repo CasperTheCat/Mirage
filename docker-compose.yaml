@@ -1,0 +1,40 @@
+version: "3"
+
+networks:
+  mirage:
+    external: false
+    driver_opts:
+      com.docker.network.bridge.name: mirage-lake
+
+services:
+  server:
+    build: .
+    environment:
+      - DB_TYPE=postgres
+      - PGHOST=db
+      - PGDATABASE=mirage
+      - PGUSER=mirage
+      - PGPASS=password
+    restart: always
+    networks:
+      - mirage
+    volumes:
+      - /local/:/source/images:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "6789:3000"
+    depends_on:
+      - db
+
+  db:
+    image: postgres:14
+    restart: always
+    environment:
+      - POSTGRES_USER=mirage
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=mirage
+    networks:
+      - mirage
+    volumes:
+      - ./postgres:/var/lib/postgresql/data

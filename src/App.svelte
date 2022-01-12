@@ -9,10 +9,13 @@
 
 	let showModal = false;
 	let listedTags: string[] = [];
+	let globalAllTags: string[] = [];
 	let editTagString: string = "";
 	let listedModalX: number = 0;
 	let listedModalY: number = 0;
 	let listedHash: string = "";
+	let selectedTagControl: String = undefined;
+	let selectedNewTagName: String = undefined;
 
 	export let name: string;
 	let loggedIn: boolean = false;
@@ -37,10 +40,34 @@
 	const EState_BoardView = 2;
 	const EState_SearchView = 3;
 	const EState_TagUntagView = 4;
+	const EState_TagManView = 5;
 
 	let PageState = EState_FrontPage;
 
 	let KeyStateLive:boolean = false;
+
+	async function UpdateTagList()
+	{
+		try
+		{
+			//console.log(event.detail.hash);
+			let fetchable = await fetch('/api/image/tags');
+			let blob: JSON = await fetchable.json();
+
+			if ("tags" in blob)
+			{
+				globalAllTags = blob["tags"];
+				console.log(globalAllTags);
+			}
+		}
+		catch (Exception)
+		{
+			if(loggedIn)
+			{
+				console.log("Getting tags failed");
+			}
+		}
+	}
 
 	async function HandleSubmitNewTags()
 	{
@@ -58,9 +85,8 @@
 			// 	tgs[i] = `'${tgs[i]}'`
 			// }
 
-			let tgString: string = tgs.join(" ");
-
-			console.log(tgString);
+			// Remove nulls. Backend should do this too, but why not make it easier
+			tgs = tgs.filter(e=>e);
 
 			let fetchable = await fetch(`/api/image/meta/${listedHash}/tag`,
 			{
@@ -72,10 +98,72 @@
 			});
 			
 			showModal = false;
+			UpdateTagList();
 		}
 		catch (Exception)
 		{
 
+		}
+	}
+
+	async function HandleDeleteTag()
+	{
+		try
+		{
+			if (selectedTagControl !== undefined)
+			{
+				let fetchable = await fetch('/api/image/tag/delete',
+				{
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json;charset=utf-8'
+					},
+					body: JSON.stringify([selectedTagControl])
+				});
+				
+				showModal = false;
+			}
+		}
+		catch (Exception)
+		{
+
+		}
+		finally
+		{
+			await UpdateTagList();
+		}
+	}
+
+	async function HandleRenameTag()
+	{
+		try
+		{
+			if (selectedTagControl !== undefined && selectedNewTagName !== undefined && selectedNewTagName !== "")
+			{
+				let fetchable = await fetch('/api/image/tag/rename',
+				{
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json;charset=utf-8'
+					},
+					body: JSON.stringify(
+						{
+							"tagPairs": [
+								[selectedTagControl, selectedNewTagName]
+							]
+						})
+				});
+				
+				showModal = false;
+			}
+		}
+		catch (Exception)
+		{
+
+		}
+		finally
+		{
+			await UpdateTagList();
 		}
 	}
 
@@ -89,6 +177,45 @@
 		if(showModal)
 		{
 			ForcedScrollToModal();
+		}
+	}
+
+	async function HandleTagControlSummon(event)
+	{
+		console.log(event.detail);
+		try
+		{
+			if (globalAllTags.length === 0)
+			{
+				await UpdateTagList();
+			}
+			//console.log(event.detail.hash);
+			//let fetchable = await fetch(`/api/image/meta/${event.detail.hash}/tag`);
+			//let blob: JSON = await fetchable.json();
+
+			// if ("tags" in blob)
+			// {
+			// 	listedTags = blob["tags"];
+			// 	console.log(listedTags);
+			// }			
+
+			listedModalX = event.detail.x;// - (innerHeight / 2) ;
+			listedModalY = event.detail.y;// - (innerHeight / 2);
+
+			selectedTagControl = event.detail.tag;
+
+			if (selectedTagControl !== undefined)
+			{
+				showModal = true;
+				selectedNewTagName = selectedTagControl;
+				ForcedScrollToModal();
+			}
+		}
+		catch (Exception)
+		{
+			console.log("Failed to summon tag panel");
+			showModal = false;
+			console.log(Exception);
 		}
 	}
 
@@ -108,7 +235,6 @@
 			//console.log(event.detail.hash);
 			let fetchable = await fetch(`/api/image/meta/${event.detail.hash}/tag`);
 			let blob: JSON = await fetchable.json();
-			let tags: string[];
 
 			if ("tags" in blob)
 			{
@@ -117,7 +243,7 @@
 			}			
 
 			listedModalX = event.detail.x;// - (innerHeight / 2) ;
-			listedModalY = event.detail.y - (innerHeight / 2);
+			listedModalY = event.detail.y;// - (innerHeight / 2);
 
 			editTagString = listedTags.join("\n");
 			listedHash = event.detail.hash;
@@ -209,6 +335,7 @@
 		if (TagSearchString === "")
 		{
 			bShouldDisplay = false;
+			loadedPhotoCount = 0;
 			return;
 		}
 
@@ -295,6 +422,28 @@
 		
 	}
 
+	async function SwitchToTagManSelect()
+	{
+		try
+		{
+			// Wait for the update
+			await UpdateTagList();
+			//bShouldDisplay = true;
+			PageState = EState_TagManView;
+		}
+		catch (Exception)
+		{
+			PageState = EState_FrontPage;
+		}
+		finally
+		{
+			//ResetState();
+			ResetSearchState();
+		}
+		
+	}
+
+
 	async function fetchStats()
 	{
 		try
@@ -340,9 +489,6 @@
 			
 		}
 	}
-	
-	onMount(fetchStats);
-	onMount(GetUserInfo);
 
 	function argmin(a) {
 		let lowest = 0;
@@ -473,6 +619,10 @@
 	//beforeUpdate(updateColumns);
 	//onMount(updateColumns);
 
+	onMount(fetchStats);
+	onMount(GetUserInfo);
+	onMount(UpdateTagList);
+
 </script>
 
 <svelte:window on:hashchange={GetUserInfo} on:resize={boundUpdateColumns} on:scroll={HandleScroll}/>
@@ -488,6 +638,8 @@
 			/Search
 			{:else if PageState === EState_TagUntagView}
 			/Untagged
+			{:else if PageState === EState_TagManView}
+			/TagMan
 			{/if}
 			
 		</h1>
@@ -498,7 +650,7 @@
 	</div>
 </nav>
 
-<main style={PageState === EState_BoardSelect || PageState === EState_FrontPage ? "padding-top: 64px;" : "padding-top: 54px;"}>
+<main style={PageState === EState_BoardSelect || PageState === EState_TagManView || PageState === EState_FrontPage ? "padding-top: 64px;" : "padding-top: 54px;"}>
 	<!-- <p>Welcome to the Mirage Moodboard</p>
 	<br/>
 	{#if countImages > 0}
@@ -535,24 +687,42 @@
 			{/if}
 		{:else if PageState === EState_BoardSelect}
 			<div></div>
+		{:else if PageState === EState_TagManView}
+			<div class="menu">
+				{#each globalAllTags as col}
+					<Card name="{col}" tag={col} on:summon={HandleTagControlSummon}/>
+				{/each}
+			</div>
 		{:else}
 			<div class="menu">
-				<Card on:click={SwitchToBoardSelect} name="Boards"/>
-				<Card on:click={SwitchToSearchView} name="Search"/>
-				<Card on:click={SwitchToTaggerSelect} name="Untagged"/>
+				<Card on:summon={SwitchToBoardSelect} name="Boards"/>
+				<Card on:summon={SwitchToSearchView} name="Search"/>
+				<Card on:summon={SwitchToTaggerSelect} name="Untagged"/>
+				<Card on:summon={SwitchToTagManSelect} name="Tag Management"/>
 			</div>
 		{/if}
 	{/if}
 </main>
 
 {#if showModal}
-<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>
-	<h2 slot="header">
-		Item Tagging
-	</h2>
-	<textarea bind:value={editTagString}></textarea>
-	<button on:click={HandleSubmitNewTags}>Save Tags</button>
-</Modal>
+	{#if PageState === EState_TagManView}
+		<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>
+			<h2 slot="header">
+				Edit Tag: {selectedTagControl}
+			</h2>
+			<textarea bind:value={selectedNewTagName} rows="1"></textarea>
+			<button on:click={HandleDeleteTag}>Delete Tag</button>
+			<button on:click={HandleRenameTag}>Rename Tag</button>
+		</Modal>
+	{:else}
+		<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>
+			<h2 slot="header">
+				Item Tagging
+			</h2>
+			<textarea bind:value={editTagString} rows="15"></textarea>
+			<button on:click={HandleSubmitNewTags}>Save Tags</button>
+		</Modal>
+	{/if}
 {/if}
 
 <style>

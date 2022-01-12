@@ -129,6 +129,21 @@ class MirageDB
         }
     );
 
+    PSDeleteTag = new PreparedStatement(
+        {
+            name: "PSDeleteTag",
+            text: "UPDATE images SET tags = ts_delete(tags::tsvector, $2::text) WHERE tags @@ $1::tsquery"
+        }
+    );
+
+    PSRenameTag = new PreparedStatement(
+        {
+            name: "PSRenameTag",
+            text: "UPDATE images SET tags = tsvector_concat(ts_delete(tags, $3::text), $2) WHERE tags @@ $1::tsquery"
+        }
+    );
+    
+
     PSUpdateImageTagsByID = new PreparedStatement(
         {
             name: "PSUpdateImageTagsByID",
@@ -207,7 +222,12 @@ class MirageDB
         }
     );
 
-    
+    PSGetTagList = new PreparedStatement(
+        {
+            name: "PSGetTagList",
+            text: "SELECT array_agg(distinct(n)) FROM images, unnest(tsvector_to_array(tags)) as n WHERE live = true"
+        }
+    );
 
 
     constructor()
@@ -399,6 +419,16 @@ class MirageDB
         return this.pgdb.none(this.PSUpdateImageTagsByHash, [hash, tags]);
     }
 
+    async DeleteTag(tags: string)
+    {
+        return this.pgdb.none(this.PSDeleteTag, [tags, tags]);
+    }
+
+    async RenameTag(oldTag: string, newTag: string)
+    {
+        return this.pgdb.none(this.PSRenameTag, [oldTag, newTag, oldTag]);
+    }   
+
     async GetImagesByBoard(boarduid: number)
     {
         return this.pgdb.manyOrNone(this.PSGetImagesByBoard, [boarduid]);
@@ -427,6 +457,11 @@ class MirageDB
     async GetUntaggedImages()
     {
         return this.pgdb.manyOrNone(this.PSGetUntaggedImages, []);
+    }
+
+    async GetTagList()
+    {
+        return this.pgdb.manyOrNone(this.PSGetTagList, []);
     }
 
     async AddImage(hash: Buffer, perceptualHash: Buffer, width: number, height: number, loadPath: string, tags: string)

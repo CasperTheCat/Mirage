@@ -43,7 +43,7 @@
 
 <div class="modal-background" on:click={close}></div>
 
-<div class="modal" role="dialog" aria-modal="true" bind:this={modal} style="margin-top: {offsetY}px;">
+<div class="modal" role="dialog" aria-modal="true" bind:this={modal} style="margin-top: {offsetY + 50}px;">
 	<span class="centre"><slot name="header"></slot></span>
     <br>
 	<slot></slot>

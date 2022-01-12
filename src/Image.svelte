@@ -7,12 +7,21 @@
 
     async function HandleImageSummon(event)
     {
-        console.log(event);
+        let rect = event.target.getBoundingClientRect();
+
+        let modx = rect.x + (rect.width/2);// + window.pageXOffset;
+        let mody = rect.y + (rect.height/2);// + window.pageYOffset;
+
+        if (window !== undefined && window.scrollY !== undefined && window.scrollX !== undefined)
+        {
+            modx = modx + window.scrollX;
+            mody = mody + window.scrollY - (innerHeight / 2);
+        }
 
         dispatch('summon', {
             "hash": hash,
-            "x": event.pageX,
-            "y": event.pageY
+            "x": modx,//.pageX,
+            "y": mody//pageY
         });
     }
 </script>

@@ -62,9 +62,14 @@ async function entry()
 
     // Get Folder
     // This isn't valid unless DB is up
-    await DiscardOrMark(__imagePath, mirageDB);
-    let imageCount = await CheckFolder(__imagePath, mirageDB, __imagePath);
-    console.log(`[INFO] Mirage checked ${imageCount} files.`);
+    {
+        await DiscardOrMark(__imagePath, mirageDB);
+    
+        let checkedImages = await CheckFolder(__imagePath, mirageDB, __imagePath);
+        console.log(`[INFO] Mirage checked ${checkedImages} files.`);
+    }
+
+    let imageCount = await mirageDB.GetImageCount();
 
 
     app.get('/login',
@@ -205,6 +210,88 @@ async function entry()
         return outArray;
     }
 
+    app.get('/api/image/tags', ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let x = await mirageDB.GetTagList();
+
+                if (x && x.length > 0 && "array_agg" in x[0])
+                {
+                    let result = { "tags": x[0]["array_agg"] };
+
+                    res.status(200).send(result);
+                }
+                else
+                {
+                    res.status(404).send("{ \"code\": 2, \"reason\": \"Tag listing failed\" }");
+                }
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(500).send("{ \"code\": 0, \"reason\": \"Exception\" }");
+            }
+        }
+    );
+
+    app.post('/api/image/tag/delete',  bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let tags: string[] = req.body;
+                for (let tag of tags)
+                {
+                    mirageDB.DeleteTag(tag);
+                }
+                
+                res.status(200).send();
+
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(500).send("{ \"code\": 0, \"reason\": \"Exception\" }");
+            }
+        }
+    );
+
+    app.post('/api/image/tag/rename',  bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let x = req.body;
+                if ("tagPairs" in req.body)
+                {
+                    for (let pair of req.body["tagPairs"])
+                    {
+                        if (pair.length === 2)
+                        {
+                            let oldTag: string = pair[0];
+                            let newTag: string = pair[1];
+
+                            mirageDB.RenameTag(oldTag, newTag);
+                        }
+                    }
+                    res.status(200).send();
+                }
+                else
+                {
+                    res.status(404).send("{ \"code\": 1, \"reason\": \"Exception\" }");
+                }
+
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(500).send("{ \"code\": 0, \"reason\": \"Exception\" }");
+            }
+        }
+    );
+
     app.get('/api/image/meta/:id/tag', ensureLoggedIn(), 
         async (req, res) => 
         {
@@ -243,9 +330,15 @@ async function entry()
                 let y = Buffer.from(req.params.id, 'hex');
                 let resarray: string[] = req.body;
 
+                resarray = resarray.filter(e => e);
+
                 for (let i = 0; i < resarray.length; ++i)
                 {
-                    resarray[i] = `'${resarray[i].toLowerCase()}'`;
+                    let temp = resarray[i].toLowerCase();
+                    temp.replace(/[.,\/#!$%\^&\*;:{}=\-_`\'\"~()]/g,"");
+                    temp.replace(/\s{2,}/g," ");
+                    
+                    resarray[i] = `'${temp}'`;
                 }
                 let newTags = resarray.join(" ");
                 //let x = await mirageDB.GetImageTagsByHash(y);

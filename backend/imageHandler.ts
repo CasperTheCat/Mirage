@@ -77,9 +77,19 @@ async function DiscardOrMark(root: string, db: MirageDB)
     }
 }
 
-async function CheckFolder(check: string, db: MirageDB, root: string)
+async function CheckFolder(check: string, db: MirageDB, root: string, imageList: string[] = [])
 {
     let countProcessed = 0;
+
+    if (imageList.length === 0)
+    {
+        // Get known paths
+        let fetchedList = await db.GetAllImagesMark();
+        for (let item of fetchedList)
+        {
+            imageList.push(item["path"]);
+        }
+    }
 
     try
     {
@@ -88,16 +98,23 @@ async function CheckFolder(check: string, db: MirageDB, root: string)
         for (let item of directories)
         {
             const itemPath = path.resolve(check, item.name);
-
-            if (item.isDirectory())
+            let rlpath = path.relative(root, itemPath);
+            
+            // Pre Check
+            if (imageList.indexOf(rlpath) > -1)
             {
-                countProcessed += await CheckFolder(itemPath, db, root);
+                // Ignore. It's here
+                ++countProcessed;
+            }
+            else if (item.isDirectory())
+            {
+                countProcessed += await CheckFolder(itemPath, db, root, imageList);
             }
             else if (item.isFile())
             {
                 // Check that this file exists in the DB
                 let imageHash = await HashFile(itemPath);
-                let rlpath = path.relative(root, itemPath);
+                //let rlpath = path.relative(root, itemPath);
 
                 // Get prelimary tags
                 const tagList = rlpath.split("/").slice(0, -1);
