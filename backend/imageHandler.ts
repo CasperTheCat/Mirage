@@ -97,65 +97,72 @@ async function CheckFolder(check: string, db: MirageDB, root: string, imageList:
 
         for (let item of directories)
         {
-            const itemPath = path.resolve(check, item.name);
-            let rlpath = path.relative(root, itemPath);
-            
-            // Pre Check
-            if (imageList.indexOf(rlpath) > -1)
+            try
             {
-                // Ignore. It's here
-                ++countProcessed;
-            }
-            else if (item.isDirectory())
-            {
-                countProcessed += await CheckFolder(itemPath, db, root, imageList);
-            }
-            else if (item.isFile())
-            {
-                // Check that this file exists in the DB
-                let imageHash = await HashFile(itemPath);
-                //let rlpath = path.relative(root, itemPath);
-
-                // Get prelimary tags
-                const tagList = rlpath.split("/").slice(0, -1);
-                let cleanTags: string[] = [];
-
-                for (let uncleanTag of tagList)
+                const itemPath = path.resolve(check, item.name);
+                let rlpath = path.relative(root, itemPath);
+                
+                // Pre Check
+                if (imageList.indexOf(rlpath) > -1)
                 {
-                    cleanTags.push(SanitiseTag(uncleanTag))
+                    // Ignore. It's here
+                    ++countProcessed;
                 }
-
-                let prelimTags = cleanTags.join(" ");
-
-                let result = await db.GetImageByHash(imageHash);
-
-                if (result)
+                else if (item.isDirectory())
                 {
-                    // Check the path
-                    if (result["path"] !== rlpath)
+                    countProcessed += await CheckFolder(itemPath, db, root, imageList);
+                }
+                else if (item.isFile())
+                {
+                    // Check that this file exists in the DB
+                    let imageHash = await HashFile(itemPath);
+                    //let rlpath = path.relative(root, itemPath);
+
+                    // Get prelimary tags
+                    const tagList = rlpath.split("/").slice(0, -1);
+                    let cleanTags: string[] = [];
+
+                    for (let uncleanTag of tagList)
                     {
-                        db.UpdateImageLocationByID(result["imageid"], rlpath);
-                        console.log(`[INFO] Missing file at ${rlpath}. Updated Location`);
+                        cleanTags.push(SanitiseTag(uncleanTag))
                     }
-                    else if (!result["live"])
+
+                    let prelimTags = cleanTags.join(" ");
+
+                    let result = await db.GetImageByHash(imageHash);
+
+                    if (result)
                     {
-                        // We found a file that has been marked as deleted
-                        console.log(`[INFO] Found file at ${rlpath}. Setting file live.`);
-                        db.MarkImageLive(result["imageid"]);
+                        // Check the path
+                        if (result["path"] !== rlpath)
+                        {
+                            db.UpdateImageLocationByID(result["imageid"], rlpath);
+                            console.log(`[INFO] Missing file at ${rlpath}. Updated Location`);
+                        }
+                        else if (!result["live"])
+                        {
+                            // We found a file that has been marked as deleted
+                            console.log(`[INFO] Found file at ${rlpath}. Setting file live.`);
+                            db.MarkImageLive(result["imageid"]);
+                        }
                     }
+                    else
+                    {
+                        console.log(`[INFO] Ingesting ${rlpath}`);
+                        await IngestImage(root, rlpath, imageHash, db, prelimTags);
+                    }
+
+                    ++countProcessed;
+                    
                 }
                 else
                 {
-                    console.log(`[INFO] Ingesting ${rlpath}`);
-                    await IngestImage(root, rlpath, imageHash, db, prelimTags);
+                    console.log("WTF?");
                 }
-
-                ++countProcessed;
-                
             }
-            else
+            catch (Exception)
             {
-                console.log("WTF?");
+
             }
         }
     }
@@ -197,7 +204,9 @@ async function IngestImageFromPath(root: string, relpath: string, db: MirageDB)
 function SanitiseTag(tag: string)
 {
     let temp = tag.toLowerCase();
-    temp = temp.replace(/[.,\/#!$%\^&\*;:{}=\-_`\'\"~()]/g,"");
+    //temp = temp.replace(/[.,\/#!$%\^&\*;:{}=\-_\`\'\"~()]/g,"");
+    //temp = temp.replace(/[.,\\\/#!$%\^&\*;:{}=\-_\`\'\"~()]/g,"");
+    temp = temp.replace(/[.,\\\/#!$%\^&\*;:{}=_\`\'\"~()]/g,"");
     temp = temp.replace(/\s{2,}/g," ");
 
     return temp;
