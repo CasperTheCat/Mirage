@@ -14,8 +14,10 @@
 	let listedModalX: number = 0;
 	let listedModalY: number = 0;
 	let listedHash: string = "";
-	let selectedTagControl: String = undefined;
-	let selectedNewTagName: String = undefined;
+	let selectedTagControl: string = undefined;
+	let selectedNewTagName: string = undefined;
+	let confirmationAction: Function = undefined;
+	let oldPageState: number = undefined;
 
 	export let name: string;
 	let loggedIn: boolean = false;
@@ -41,6 +43,7 @@
 	const EState_SearchView = 3;
 	const EState_TagUntagView = 4;
 	const EState_TagManView = 5;
+	const EState_Confirm = 6;
 
 	let PageState = EState_FrontPage;
 
@@ -66,6 +69,21 @@
 			{
 				console.log("Getting tags failed");
 			}
+		}
+	}
+
+	async function HandleViewTag()
+	{
+		// Okay, we want to switch page state
+		try 
+		{
+			await SwitchToSearchView();
+			TagSearchString = selectedTagControl !== undefined ? selectedTagControl : "";
+			await ExecuteSearch();
+		}
+		catch (Exception)
+		{
+
 		}
 	}
 
@@ -106,6 +124,48 @@
 		}
 	}
 
+	async function HandleConfirmedAction()
+	{
+		try
+		{
+			if(confirmationAction !== undefined)
+			{
+				await confirmationAction();
+				confirmationAction = undefined;
+			}
+
+			// We want to go back
+			PageState = oldPageState;
+
+			// Make sure
+			showModal = false;
+		}
+		catch (Exception)
+		{
+
+		}
+	}
+
+	async function HandleCancelledAction()
+	{
+		// Just delete the action that got stored
+		// We don't want to accidentally trigger it
+		if(confirmationAction !== undefined)
+		{
+			confirmationAction = undefined;
+		}
+
+		PageState = oldPageState;
+	}
+
+	async function HandleWantDeleteTag()
+	{
+		// Store function
+		confirmationAction = HandleDeleteTag;
+		oldPageState = PageState;
+		PageState = EState_Confirm;
+	}
+
 	async function HandleDeleteTag()
 	{
 		try
@@ -132,6 +192,14 @@
 		{
 			await UpdateTagList();
 		}
+	}
+
+	async function HandleWantRenameTag()
+	{
+		// Store function
+		confirmationAction = HandleRenameTag;
+		oldPageState = PageState;
+		PageState = EState_Confirm;
 	}
 
 	async function HandleRenameTag()
@@ -308,6 +376,7 @@
 		finally
 		{
 			ResetDisplayState();
+			showModal = false;
 		}
 		
 	}
@@ -327,6 +396,7 @@
 		finally
 		{
 			ResetSearchState();
+			showModal = false;
 		}
 	}
 
@@ -378,6 +448,7 @@
 		finally
 		{
 			ResetSearchState();
+			showModal = false;
 		}
 		
 	}	
@@ -397,6 +468,7 @@
 		finally
 		{
 			ResetSearchState();
+			showModal = false;
 		}
 		
 	}
@@ -418,6 +490,7 @@
 		{
 			//ResetState();
 			ResetSearchState();
+			showModal = false;
 		}
 		
 	}
@@ -439,6 +512,7 @@
 		{
 			//ResetState();
 			ResetSearchState();
+			showModal = false;
 		}
 		
 	}
@@ -711,8 +785,17 @@
 				Edit Tag: {selectedTagControl}
 			</h2>
 			<textarea bind:value={selectedNewTagName} rows="1"></textarea>
-			<button on:click={HandleDeleteTag}>Delete Tag</button>
-			<button on:click={HandleRenameTag}>Rename Tag</button>
+			<button on:click={HandleViewTag}>View Tag</button>
+			<button on:click={HandleWantDeleteTag}>Delete Tag</button>
+			<button on:click={HandleWantRenameTag}>Rename Tag</button>
+		</Modal>
+	{:else if PageState === EState_Confirm}
+		<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>
+			<h2 slot="header">
+				Confirm?
+			</h2>
+			<button on:click={HandleCancelledAction}>Cancel</button>
+			<button on:click={HandleConfirmedAction}>Proceed</button>
 		</Modal>
 	{:else}
 		<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>
