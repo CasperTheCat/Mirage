@@ -62,7 +62,7 @@ class MirageDB
     PSGetBoardsByUID = new PreparedStatement(
         {
             name: "PSGetBoardReferencesByUID",
-            text: "SELECT boards.* FROM boards, user_board WHERE boards.boardid = user_board.boardid AND user_board.ownerid = $1"
+            text: "SELECT boards.boardid, boards.boardname FROM boards, user_board WHERE boards.boardid = user_board.boardid AND user_board.ownerid = $1"
         }
     );
 
@@ -129,20 +129,76 @@ class MirageDB
         }
     );
 
+    // PSDeleteTag = new PreparedStatement(
+    //     {
+    //         name: "PSDeleteTag",
+    //         text: "UPDATE images SET tags = ts_delete(tags::tsvector, $2::text) WHERE tags @@ $1::tsquery"
+    //     }
+    // );
+
     PSDeleteTag = new PreparedStatement(
         {
             name: "PSDeleteTag",
-            text: "UPDATE images SET tags = ts_delete(tags::tsvector, $2::text) WHERE tags @@ $1::tsquery"
-        }
-    );
-
-    PSRenameTag = new PreparedStatement(
-        {
-            name: "PSRenameTag",
-            text: "UPDATE images SET tags = tsvector_concat(ts_delete(tags, $3::text), $2) WHERE tags @@ $1::tsquery"
+            text: "UPDATE images SET tags = array_to_tsvector(array_remove(tsvector_to_array(tags), $2::text)) WHERE tags @@ $1::tsquery"
         }
     );
     
+    // PSRenameTag = new PreparedStatement(
+    //     {
+    //         name: "PSRenameTag",
+    //         text: "UPDATE images SET tags = tsvector_concat(ts_delete(tags, $3::text), $2) WHERE tags @@ $1::tsquery"
+    //     }
+    // );
+    PSRenameTag = new PreparedStatement(
+        {
+            name: "PSRenameTag",
+            text: "UPDATE images SET tags = array_to_tsvector(array_append(array_remove(tsvector_to_array(tags), $3::text), $2::text)) WHERE tags @@ $1::tsquery"
+        }
+    );
+    // PSRenameTag = new PreparedStatement(
+    //     {
+    //         name: "PSRenameTag",
+    //         text: "UPDATE images SET tags = tsvector_concat(array_to_tsvector(array_remove(tsvector_to_array(tags), $3::text)), $2::tsvector) WHERE tags @@ $1::tsquery"
+    //     }
+    // );    
+
+    PSAppendTag = new PreparedStatement(
+        {
+            name: "PSAppendTag",
+            text: "UPDATE images SET tags = array_to_tsvector(array_append(tsvector_to_array(tags), $2::text)) WHERE tags @@ $1::tsquery"
+        }
+    );   
+    // PSAppendTag = new PreparedStatement(
+    //     {
+    //         name: "PSAppendTag",
+    //         text: "UPDATE images SET tags = tsvector_concat(tags, $2::tsvector) WHERE tags @@ $1::tsquery"
+    //     }
+    // );   
+    
+    PSAddImageToBoard = new PreparedStatement(
+        {
+            name: "PSAddImageToBoard",
+            text: "UPDATE boards \
+                SET imageids = array_append(boards.imageids, images.imageid) \
+                FROM images \
+                    WHERE images.normalhash = $2 \
+                    AND images.imageid != ANY(boards.imageids) \
+                    AND boards.boardid = $1"
+        }
+    );  
+
+    PSRemoveImageFromBoard = new PreparedStatement(
+        {
+            name: "PSRemoveImageFromBoard",
+            text: "UPDATE boards \
+                SET imageids = array_remove(boards.imageids, images.imageid) \
+                FROM images \
+                    WHERE images.normalhash = $2 \
+                    AND images.imageid = ANY(boards.imageids) \
+                    AND boards.boardid = $1"
+        }
+    );  
+
 
     PSUpdateImageTagsByID = new PreparedStatement(
         {
@@ -328,7 +384,7 @@ class MirageDB
             ( \
                 boardid INT NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY, \
                 boardname VARCHAR, \
-                imageids INT ARRAY \
+                imageids INT ARRAY DEFAULT '{}' NOT NULL \
             ); \
         ");
 
@@ -436,6 +492,11 @@ class MirageDB
         return this.pgdb.none(this.PSRenameTag, [oldTag, newTag, oldTag]);
     }   
 
+    async AppendTag(query: string, newTag: string)
+    {
+        return this.pgdb.none(this.PSAppendTag, [query, newTag]);
+    }   
+
     async GetImagesByBoard(boarduid: number)
     {
         return this.pgdb.manyOrNone(this.PSGetImagesByBoard, [boarduid]);
@@ -444,6 +505,16 @@ class MirageDB
     async GetImagesByBoardShort(boarduid: number)
     {
         return this.pgdb.manyOrNone(this.PSGetImagesByBoardShort, [boarduid]);
+    }
+
+    async AddImageToBoard(boarduid: number, hash: Buffer)
+    {
+        return this.pgdb.none(this.PSAddImageToBoard, [boarduid, hash]);
+    }
+
+    async RemoveImageToBoard(boarduid: number, hash: Buffer)
+    {
+        return this.pgdb.none(this.PSRemoveImageFromBoard, [boarduid, hash]);
     }
     
     async MarkImageDeleted(imageid:number)
@@ -501,6 +572,31 @@ class MirageDB
             return false;
         }
     }
+
+    async AddBoard(userid:number, boardname: string)
+    {
+        try
+        {
+            let res = await this.pgdb.one("INSERT INTO boards (boardname) VALUES ($1) RETURNING boardid;", [
+                boardname
+            ]
+            );
+
+            let res2 = await this.pgdb.one("INSERT INTO user_board (boardid, ownerid) VALUES ($1, $2) RETURNING boardid;", [
+                res.boardid, 
+                userid
+            ]
+            );         
+
+            return true;
+        }
+        catch (Exception)
+        {
+            console.log(Exception);
+            return false;
+        }
+    }
+
 
     async AddUser(username: string, salt, key, displayname: string = "")
     {

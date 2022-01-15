@@ -10,6 +10,8 @@
 	let showModal = false;
 	let listedTags: string[] = [];
 	let globalAllTags: string[] = [];
+	let userBoards = [];
+	let newBoardName: string = "";
 	let editTagString: string = "";
 	let listedModalX: number = 0;
 	let listedModalY: number = 0;
@@ -53,6 +55,78 @@
 
 	let KeyStateLive:boolean = false;
 
+	async function HandleRemoveFromBoard()
+	{
+		try
+		{
+			let fetchable = await fetch(`/api/board/remove`,
+			{
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json;charset=utf-8'
+				},
+  				body: JSON.stringify(
+					[
+						{
+						  "board": SelectedBoardID,
+						  "hashes": [listedHash]
+						}
+					]  
+				  )
+			});
+		}
+		catch (Exception)
+		{
+			console.log(Exception);	
+		}
+		finally
+		{
+			if(PageState === EState_BoardView)
+			{
+				bShouldDisplay = false;
+				await SwitchToBoardView(SelectedBoardID);
+			}
+			showModal = false;
+		}
+	}
+
+	async function HandleAddToBoard()
+	{
+		try
+		{
+			let fetchable = await fetch(`/api/board/add`,
+			{
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json;charset=utf-8'
+				},
+  				body: JSON.stringify(
+					[
+						{
+						  "board": SelectedBoardID,
+						  "hashes": [listedHash]
+						}
+					]  
+				  )
+			});
+			
+			
+		}
+		catch (Exception)
+		{
+
+		}
+		finally
+		{
+			if(PageState === EState_BoardView)
+			{
+				bShouldDisplay = false;
+				await SwitchToBoardView(SelectedBoardID);
+			}
+			showModal = false;
+		}
+	}
+
 	async function UpdateTagList()
 	{
 		try
@@ -73,6 +147,33 @@
 			{
 				console.log("Getting tags failed");
 			}
+		}
+	}
+
+	async function HandleNewBoard()
+	{
+		// 
+		console.log("Creating", newBoardName);
+
+		// console
+		try
+		{
+			let fetchable = await fetch(`/api/board/create`,
+			{
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json;charset=utf-8'
+				},
+  				body: JSON.stringify([newBoardName])
+			});
+		}
+		catch (Exception)
+		{
+
+		}
+		finally
+		{
+			await LoadBoards();
 		}
 	}
 
@@ -215,6 +316,24 @@
 		ShowConfirmModal();
 	}
 
+	async function HandleWantAppendTag()
+	{
+		// Store function
+		confirmationAction = HandleAppendTag;
+		//oldPageState = PageState;
+		//PageState = EState_Confirm;
+		ShowConfirmModal();
+	}
+
+	async function HandleWantApplyToQuery()
+	{
+		// Store function
+		confirmationAction = HandleApplyToQuery;
+		//oldPageState = PageState;
+		//PageState = EState_Confirm;
+		ShowConfirmModal();
+	}
+
 	async function GetTagCount(tagList: string[])
 	{
 		try
@@ -279,6 +398,85 @@
 		}
 	}
 
+	async function HandleAppendTag()
+	{
+		try
+		{
+			// Treat as
+			if (selectedTagControl !== undefined && selectedNewTagName !== undefined && selectedNewTagName !== "")
+			{
+				// Okay. We are applying the box to the tag. Box is selected New Tag Name
+				// Can separate by newline
+				let tgs = selectedNewTagName.split("\n");
+				tgs = tgs.filter(e=>e);
+				let tagPairList = [];
+
+				for (let tg of tgs)
+				{
+					tagPairList.push([selectedTagControl, tg]);
+				}
+
+				console.log(tagPairList);
+
+				let fetchable = await fetch('/api/image/tag/append',
+				{
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json;charset=utf-8'
+					},
+					body: JSON.stringify(
+						{
+							"tagPairs": tagPairList
+						})
+				});
+				
+				showModal = false;
+			}
+		}
+		catch (Exception)
+		{
+
+		}
+		finally
+		{
+			await UpdateTagList();
+		}
+	}
+
+	async function HandleApplyToQuery()
+	{
+		try
+		{
+			// Treat as
+			if (selectedTagControl !== undefined && selectedNewTagName !== undefined && selectedNewTagName !== "")
+			{
+				let fetchable = await fetch('/api/image/tag/append',
+				{
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json;charset=utf-8'
+					},
+					body: JSON.stringify(
+						{
+							"tagPairs": [
+								[selectedNewTagName, selectedTagControl]
+							]
+						})
+				});
+				
+				showModal = false;
+			}
+		}
+		catch (Exception)
+		{
+
+		}
+		finally
+		{
+			await UpdateTagList();
+		}
+	}
+
 	function ForcedScrollToModal()
 	{
 		scrollTo(0, listedModalY );// listedModalY);
@@ -289,6 +487,29 @@
 		if(showModal)
 		{
 			ForcedScrollToModal();
+		}
+	}
+
+	async function HandleSelectBoard(event)
+	{
+		try
+		{
+			// Okay...
+			console.log(event.detail);
+			//SelectedBoardName
+			// Get Images
+			const tag = event.detail.tag;
+			if ("boardid" in tag && "boardname" in tag)
+			{
+				SelectedBoardName = tag.boardname;
+				await SwitchToBoardView(tag.boardid);
+			}
+			
+			//await LoadImages(`/api/board/${event.detail.tag}/images`);
+		}
+		catch (Exception)
+		{
+
 		}
 	}
 
@@ -511,6 +732,7 @@
 			await LoadImages(`/api/board/${id}/images`);
 			SelectedBoardID = id;
 			PageState = EState_BoardView;
+			bShouldDisplay = true;
 		}
 		catch (Exception)
 		{
@@ -543,6 +765,11 @@
 			ResetSearchState();
 			showModal = false;
 		}
+		
+	}
+
+	async function SwitchToBoardManSelect()
+	{
 		
 	}
 
@@ -674,7 +901,12 @@
 			let fetchable = await fetch('/api/board')
 			let blob: JSON = await fetchable.json();
 			
-			console.log(blob);
+			//console.log(blob);
+			if("boards" in blob)
+			{
+				userBoards = blob["boards"];
+			}
+			console.log(userBoards);
 		}
 		catch (Exception)
 		{
@@ -747,6 +979,7 @@
 	onMount(fetchStats);
 	onMount(GetUserInfo);
 	onMount(UpdateTagList);
+	onMount(LoadBoards);
 
 </script>
 
@@ -784,10 +1017,27 @@
 	{/if} -->
 	{#if loggedIn}
 		{#if PageState === EState_SearchView}
-			<div>Tag Search</div>
-			<input bind:value={TagSearchString} placeholder="Query" on:input={HandleSearchInput} on:keydown={HandleSearchKey}>
-			<input type="submit" value="Execute" on:click={ExecuteSearch}/>
-			<!-- <input  value="Submit"> -->
+			<div>
+				<br>
+				<h2>Tag Search</h2>
+				<input bind:value={TagSearchString} placeholder="Query" on:input={HandleSearchInput} on:keydown={HandleSearchKey}>
+				<input type="submit" value="Execute" on:click={ExecuteSearch}/>
+				<!-- <input  value="Submit"> -->
+				<br>
+				<br>
+			</div>
+		{:else if PageState === EState_BoardSelect}
+			<div>
+				<br>
+				<h2>Board Select</h2>
+				<br>
+				<h3>Create New Board</h3>
+				<input bind:value={newBoardName} placeholder="New Board Name">
+				<input type="submit" value="Create" on:click={HandleNewBoard}/>
+				<!-- <input  value="Submit"> -->
+				<br>
+				<br>
+			</div>
 		{/if}
 
 		{#if (
@@ -811,7 +1061,11 @@
 				<p>Nothing to display!</p>
 			{/if}
 		{:else if PageState === EState_BoardSelect}
-			<div></div>
+			<div class="menu">
+				{#each userBoards as col}
+					<Card name="{col.boardname}" tag={col} on:summon={HandleSelectBoard}/>
+				{/each}
+			</div>
 		{:else if PageState === EState_TagManView}
 			<div class="menu">
 				{#each globalAllTags as col}
@@ -824,6 +1078,7 @@
 				<Card on:summon={SwitchToSearchView} name="Search"/>
 				<Card on:summon={SwitchToTaggerSelect} name="Untagged"/>
 				<Card on:summon={SwitchToTagManSelect} name="Tag Management"/>
+				<Card on:summon={SwitchToBoardManSelect} name="Board Management"/>
 			</div>
 		{/if}
 	{/if}
@@ -841,11 +1096,14 @@
 	{:else if PageState === EState_TagManView}
 		<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>
 			<h2 slot="header">
-				Edit Tag: {selectedTagControl}
+				Selected Tag: {selectedTagControl}
 			</h2>
 			<p>Applied to {selectedTagCount} { selectedTagCount == 1 ? "entry" : "entries"}</p>
 			<textarea bind:value={selectedNewTagName} rows="1"></textarea>
 			<button on:click={HandleViewTag}>View Tag</button>
+			<button on:click={HandleWantAppendTag}>Apply Query to Tag</button>
+			<button on:click={HandleWantApplyToQuery}>Apply Tag to Query</button>
+			<br>
 			<button on:click={HandleWantDeleteTag}>Delete Tag</button>
 			<button on:click={HandleWantRenameTag}>Rename Tag</button>
 		</Modal>
@@ -854,8 +1112,20 @@
 			<h2 slot="header">
 				Item Tagging
 			</h2>
+			<!-- <input bind:value={SelectedBoardID} type="number" min="1"> -->
+			<span class="centering">
+			<select bind:value={SelectedBoardID}>
+				{#each userBoards as brds}
+					<option value={brds.boardid}>{brds.boardname}</option>
+				{/each}
+			</select>
+			<button on:click={HandleAddToBoard}>Add to Board</button>
+			<button on:click={HandleRemoveFromBoard}>Remove</button>
+			</span>
 			<textarea bind:value={editTagString} rows="15"></textarea>
 			<button on:click={HandleSubmitNewTags}>Save Tags</button>
+
+			
 		</Modal>
 	{/if}
 {/if}
@@ -929,12 +1199,26 @@
 		border: none;
 	}
 
+	.centering {
+		display: flex;
+		justify-content: space-evenly;
+		flex-wrap: nowrap;
+		align-content: flex-end;
+	}
+
     textarea
     {
         background-color: #3c3c3c;
         color: white;
 		width:100%;
     }
+
+	select
+	{
+		background-color: #3c3c3c;
+        color: white;
+		width:50%;
+	}
 
 	button
 	{

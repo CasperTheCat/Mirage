@@ -201,13 +201,19 @@ async function IngestImageFromPath(root: string, relpath: string, db: MirageDB)
     db.AddImage(normalhash, Buffer.from(""), width, height, relpath, "");
 }
 
-function SanitiseTag(tag: string)
+function SanitiseTag(tag: string, lowerOnly: boolean = false)
 {
     let temp = tag.toLowerCase();
-    //temp = temp.replace(/[.,\/#!$%\^&\*;:{}=\-_\`\'\"~()]/g,"");
-    //temp = temp.replace(/[.,\\\/#!$%\^&\*;:{}=\-_\`\'\"~()]/g,"");
-    temp = temp.replace(/[.,\\\/#!$%\^&\*;:{}=_\`\'\"~()]/g,"");
-    temp = temp.replace(/\s{2,}/g," ");
+
+    if (!lowerOnly)
+    {
+        //temp = temp.replace(/[.,\/#!$%\^&\*;:{}=\-_\`\'\"~()]/g,"");
+        //temp = temp.replace(/[.,\\\/#!$%\^&\*;:{}=\-_\`\'\"~()]/g,"");
+        //temp = temp.replace(/[.,\\\/#!$%\^&\*;:{}=_\`\'\"~()]/g,"");
+        temp = temp.replace(/[.,\\\/#!$%\^&\*;:{}=\`\'\"~()]/g,"");
+        temp = temp.replace(/[_]/g," ");
+        temp = temp.replace(/\s{2,}/g," ");
+    }
 
     return temp;
 }

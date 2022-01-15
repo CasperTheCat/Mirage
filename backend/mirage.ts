@@ -62,12 +62,13 @@ async function entry()
 
     // Get Folder
     // This isn't valid unless DB is up
-    {
-        await DiscardOrMark(__imagePath, mirageDB);
-    
+    async function CheckImages()
+    {        
         let checkedImages = await CheckFolder(__imagePath, mirageDB, __imagePath);
-        console.log(`[INFO] Mirage checked ${checkedImages} files.`);
+        console.log(`[INFO] Mirage checked ${checkedImages} files.`);        
     }
+    await DiscardOrMark(__imagePath, mirageDB);
+    CheckImages();
 
     let imageCount = await mirageDB.GetImageCount();
 
@@ -245,7 +246,8 @@ async function entry()
                 let tags: string[] = req.body;
                 for (let tag of tags)
                 {
-                    let countOfTag = await mirageDB.GetImageCountByTag(tag);
+                    let sanitag = `'${SanitiseTag(tag)}'`;
+                    let countOfTag = await mirageDB.GetImageCountByTag(sanitag);
                     if ("count" in countOfTag)
                     {
                         results.push(countOfTag["count"]);
@@ -298,10 +300,46 @@ async function entry()
                     {
                         if (pair.length === 2)
                         {
-                            let oldTag: string = pair[0];
-                            let newTag: string = SanitiseTag(pair[1]);                            
+                            let oldTag: string = SanitiseTag(pair[0]);
+                            let newTag: string = SanitiseTag(pair[1]);
 
                             mirageDB.RenameTag(oldTag, newTag);
+                        }
+                    }
+                    res.status(200).send();
+                }
+                else
+                {
+                    res.status(404).send("{ \"code\": 1, \"reason\": \"Exception\" }");
+                }
+
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(500).send("{ \"code\": 0, \"reason\": \"Exception\" }");
+            }
+        }
+    );
+
+    app.post('/api/image/tag/append',  bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let x = req.body;
+                if ("tagPairs" in req.body)
+                {
+                    for (let pair of req.body["tagPairs"])
+                    {
+                        if (pair.length === 2)
+                        {
+                            let tsquery: string = SanitiseTag(pair[0], true);
+                            let newTag: string = SanitiseTag(pair[1], true);
+
+                            console.log(tsquery, newTag);
+
+                            mirageDB.AppendTag(tsquery, newTag);
                         }
                     }
                     res.status(200).send();
@@ -610,6 +648,113 @@ async function entry()
                 res.status(404).send();
             }
             //res.sendFile(path.resolve(__dirname, '../', 'public', 'index.html'));
+        }
+    );
+
+    app.post('/api/board/remove', bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let bodyjson: JSON[] = req.body;
+                for (let entry of bodyjson)
+                {
+                    if ("board" in entry && "hashes" in entry)
+                    {
+                        // Good stuff
+                        const hashes: string[] = entry["hashes"];
+                        const boardid: number = entry["board"];
+
+                        for (let i = 0; i < hashes.length; ++i )
+                        {
+                            const hexhash: Buffer = Buffer.from(hashes[i], 'hex');
+                            await mirageDB.RemoveImageToBoard(boardid, hexhash);
+                        }
+                    }
+                    else
+                    {
+                        res.status(404).send();
+                    }
+                }
+                
+                // Convert from hash to UI
+
+                res.status(200).send();
+
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(500).send("{ \"code\": 0, \"reason\": \"Exception\" }");
+            }
+        }
+    );
+
+    
+
+    app.post('/api/board/create', bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
+    async (req, res) => 
+    {
+        try
+        {
+            let bodyjson: string[] = req.body;
+            for (let entry of bodyjson)
+            {
+                const userid: any = req.user;
+                await mirageDB.AddBoard(userid, entry);
+            }
+            
+            // Convert from hash to UI
+
+            res.status(200).send();
+
+        }
+        catch (Exception)
+        {
+            console.log(Exception);
+            res.status(500).send("{ \"code\": 0, \"reason\": \"Exception\" }");
+        }
+    }
+);
+
+    app.post('/api/board/add', bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let bodyjson: JSON[] = req.body;
+                for (let entry of bodyjson)
+                {
+                    if ("board" in entry && "hashes" in entry)
+                    {
+                        // Good stuff
+                        const hashes: string[] = entry["hashes"];
+                        const boardid: number = entry["board"];
+                        console.log(boardid, hashes);
+
+                        for (let i = 0; i < hashes.length; ++i )
+                        {
+                            const hexhash: Buffer = Buffer.from(hashes[i], 'hex');
+                            console.log(hexhash);
+                            await mirageDB.AddImageToBoard(boardid, hexhash);
+                        }
+                    }
+                    else
+                    {
+                        res.status(404).send();
+                    }
+                }
+                
+                // Convert from hash to UI
+
+                res.status(200).send();
+
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(500).send("{ \"code\": 0, \"reason\": \"Exception\" }");
+            }
         }
     );
 
