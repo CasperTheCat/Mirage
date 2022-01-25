@@ -52,6 +52,20 @@ async function HashFile(path: string)
     }
 }
 
+function GetPrelimTags(rlpath)
+{
+    // Get prelimary tags
+    const tagList = rlpath.split("/").slice(0, -1);
+    let cleanTags: string[] = [];
+
+    for (let uncleanTag of tagList)
+    {
+        cleanTags.push(SanitiseTag(uncleanTag))
+    }
+
+    return cleanTags;
+}
+
 async function DiscardOrMark(root: string, db: MirageDB)
 {
     // Get all images
@@ -118,16 +132,16 @@ async function CheckFolder(check: string, db: MirageDB, root: string, imageList:
                     let imageHash = await HashFile(itemPath);
                     //let rlpath = path.relative(root, itemPath);
 
-                    // Get prelimary tags
-                    const tagList = rlpath.split("/").slice(0, -1);
-                    let cleanTags: string[] = [];
+                    // // Get prelimary tags
+                    // const tagList = rlpath.split("/").slice(0, -1);
+                    // let cleanTags: string[] = [];
 
-                    for (let uncleanTag of tagList)
-                    {
-                        cleanTags.push(SanitiseTag(uncleanTag))
-                    }
+                    // for (let uncleanTag of tagList)
+                    // {
+                    //     cleanTags.push(SanitiseTag(uncleanTag))
+                    // }
 
-                    let prelimTags = cleanTags.join(" ");
+                    let prelimTags = GetPrelimTags(rlpath).join(" ");//    let prelimTags = cleanTags.join(" ");
 
                     let result = await db.GetImageByHash(imageHash);
 
@@ -219,4 +233,4 @@ function SanitiseTag(tag: string, lowerOnly: boolean = false)
 }
 
 
-export {IngestImageFromPath, CheckFolder, DiscardOrMark, SanitiseTag};
+export {IngestImageFromPath, CheckFolder, DiscardOrMark, SanitiseTag, GetPrelimTags};

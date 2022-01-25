@@ -242,6 +242,13 @@ class MirageDB
         }
     );
 
+    PSMarkImageDeletedByHash = new PreparedStatement(
+        {
+            name: "PSMarkImageDeletedByHash",
+            text: "UPDATE images SET live = false::boolean WHERE normalhash = $1"
+        }
+    );
+
     PSMarkImageLiveByID = new PreparedStatement(
         {
             name: "PSMarkImageLiveByID",
@@ -249,6 +256,14 @@ class MirageDB
         }
     );
 
+    PSMarkImageLiveByHash = new PreparedStatement(
+        {
+            name: "PSMarkImageLiveByHash",
+            text: "UPDATE images SET live = true::boolean WHERE normalhash = $1"
+        }
+    );
+
+    //select * from images where cast(normalhash as text) LIKE '_x{}%';
     // TODO: This needs to handle getting images and returning many from this
     PSGetImagesByBoard = new PreparedStatement(
         {
@@ -261,6 +276,13 @@ class MirageDB
         {
             name: "PSGetImagesByBoardShort",
             text: "SELECT images.width, images.height, images.normalhash FROM images, boards WHERE images.live = true AND images.imageid = ANY(boards.imageids) AND boards.boardid = $1"
+        }
+    );
+
+    PSGetImagesByBoardSearchShort = new PreparedStatement(
+        {
+            name: "PSGetImagesByBoardSearchShort",
+            text: "SELECT images.width, images.height, images.normalhash FROM images, boards WHERE images.live = true AND images.imageid = ANY(boards.imageids) AND images.tags @@ $1::tsquery AND boards.boardid = $2"
         }
     );
 
@@ -507,6 +529,11 @@ class MirageDB
         return this.pgdb.manyOrNone(this.PSGetImagesByBoardShort, [boarduid]);
     }
 
+    async GetImagesByBoardSearchShort(boarduid: number, search: string)
+    {
+        return this.pgdb.manyOrNone(this.PSGetImagesByBoardSearchShort, [boarduid, search]);
+    }
+
     async AddImageToBoard(boarduid: number, hash: Buffer)
     {
         return this.pgdb.none(this.PSAddImageToBoard, [boarduid, hash]);
@@ -522,9 +549,19 @@ class MirageDB
         return this.pgdb.none(this.PSMarkImageDeletedByID, [imageid]);
     }
 
+    async MarkImageDeletedHash(hash: Buffer)
+    {
+        return this.pgdb.none(this.PSMarkImageDeletedByHash, [hash]);
+    }
+
     async MarkImageLive(imageid:number)
     {
         return this.pgdb.none(this.PSMarkImageLiveByID, [imageid]);
+    }
+
+    async MarkImageLiveHash(hash: Buffer)
+    {
+        return this.pgdb.none(this.PSMarkImageLiveByHash, [hash]);
     }
 
     async GetImageCount()

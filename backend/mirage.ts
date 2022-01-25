@@ -10,7 +10,7 @@ import {InsertNewUserToDB} from "./auth.js";
 import bodyParser from 'body-parser';
 import session from 'express-session';
 import { readFile } from "fs/promises";
-import { IngestImageFromPath, CheckFolder, DiscardOrMark, SanitiseTag } from "./imageHandler.js";
+import { IngestImageFromPath, CheckFolder, DiscardOrMark, SanitiseTag,  GetPrelimTags } from "./imageHandler.js";
 import {InitDB} from "./init/db.js";
 import {InitAuthStrat} from "./init/auth.js";
 
@@ -59,18 +59,45 @@ async function entry()
         }
     )
 
+    let imageCount = 0;
 
     // Get Folder
     // This isn't valid unless DB is up
     async function CheckImages()
-    {        
+    {   
+        let DiscardMarkTimeStart = process.hrtime();     
         let checkedImages = await CheckFolder(__imagePath, mirageDB, __imagePath);
-        console.log(`[INFO] Mirage checked ${checkedImages} files.`);        
-    }
-    await DiscardOrMark(__imagePath, mirageDB);
-    CheckImages();
+        let DiscardMarkTimeStop = process.hrtime(DiscardMarkTimeStart);
 
-    let imageCount = await mirageDB.GetImageCount();
+        console.log(`[INFO] Mirage checked ${checkedImages} files in ${DiscardMarkTimeStop[0] + DiscardMarkTimeStop[1] * 1e-9 } seconds.`);        
+
+        // Update this
+        imageCount = await mirageDB.GetImageCount();
+    }
+
+    async function MarkImages()
+    {
+        let DiscardMarkTimeStart = process.hrtime();
+        await DiscardOrMark(__imagePath, mirageDB);
+        let DiscardMarkTimeStop = process.hrtime(DiscardMarkTimeStart);
+        console.log(`[INFO] Image sweep completed in ${DiscardMarkTimeStop[0] + DiscardMarkTimeStop[1] * 1e-9 } seconds`);  
+
+        // Update this
+        imageCount = await mirageDB.GetImageCount();
+    }
+
+    {
+        await MarkImages();
+        CheckImages();
+    }
+
+    // Queue Sweep two hourly
+    setInterval(MarkImages, 2 * 60 * 60 * 1000);
+
+    // Queue Image Check every 3 days
+    setInterval(CheckImages, 3 * 24 * 60 * 60 * 1000);
+
+    imageCount = await mirageDB.GetImageCount();
 
 
     app.get('/login',
@@ -524,7 +551,12 @@ async function entry()
                 }
                 else
                 {
+                    // Mark deleted
                     res.status(404).send();
+
+                    // Mark
+                    console.log(`[WARN] Marking ${y} as dead.`)
+                    mirageDB.MarkImageDeletedHash(y);
                 }
             }
             catch (Exception)
@@ -561,6 +593,30 @@ async function entry()
             }
         }
     );
+
+    app.get("/api/image/meta/:id/suggested", ensureLoggedIn(), 
+    async (req, res) => 
+    {
+        try
+        {
+            let y = Buffer.from(req.params.id, 'hex');
+            let x = await mirageDB.GetImageByHash(y);
+
+            //console.log(x);
+
+            let z = {
+                "suggested":  GetPrelimTags(x["path"])
+            };
+
+            res.send(z);
+        }
+        catch (Exception)
+        {
+            console.log(Exception);
+            res.status(404).send();
+        }
+    }
+);
 
     app.get("/api/search/bytag", ensureLoggedIn(), 
     async (req, res) => 
@@ -794,7 +850,9 @@ async function entry()
 
     const port = process.env.PORT || 3000;
 
-    app.listen(port, () => console.log(`App on port ${port}`));
+    app.listen(port, () => console.log(`[INFO] Launching on port ${port}`));
+
+    console.log("[INFO] Mirage Online");
 }
 
 entry();

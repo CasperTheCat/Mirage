@@ -16,6 +16,7 @@
 	let listedModalX: number = 0;
 	let listedModalY: number = 0;
 	let listedHash: string = "";
+	let listedShortHash: string = "";
 	let selectedTagControl: string = undefined;
 	let selectedTagCount: number = 0;
 	let selectedNewTagName: string = undefined;
@@ -185,6 +186,28 @@
 			await SwitchToSearchView();
 			TagSearchString = selectedTagControl !== undefined ? `'${selectedTagControl}'` : "";
 			await ExecuteSearch();
+		}
+		catch (Exception)
+		{
+
+		}
+	}
+
+	async function HandleSuggestTags()
+	{
+		try
+		{
+			let fetchable = await fetch(`/api/image/meta/${listedHash}/suggested`);
+			let blob: JSON = await fetchable.json();
+
+			if ("suggested" in blob)
+			{
+				editTagString = blob["suggested"].join("\n");
+			}
+			else
+			{
+				console.log("?");
+			}
 		}
 		catch (Exception)
 		{
@@ -562,6 +585,7 @@
 	{
 		listedTags = [];
 		listedHash = "";
+		listedShortHash = "";
 		listedModalX = 0;
 		listedModalY = 0;
 		showModal = false;
@@ -586,6 +610,7 @@
 
 			editTagString = listedTags.join("\n");
 			listedHash = event.detail.hash;
+			listedShortHash = listedHash.slice(0, 8);
 
 			ModalState = EStateModal_Normal;
 			showModal = true;
@@ -1110,7 +1135,7 @@
 	{:else}
 		<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>
 			<h2 slot="header">
-				Item Tagging
+				Tagging {listedShortHash}
 			</h2>
 			<!-- <input bind:value={SelectedBoardID} type="number" min="1"> -->
 			<span class="centering">
@@ -1124,6 +1149,7 @@
 			</span>
 			<textarea bind:value={editTagString} rows="15"></textarea>
 			<button on:click={HandleSubmitNewTags}>Save Tags</button>
+			<button on:click={HandleSuggestTags}>Suggest</button>
 
 			
 		</Modal>
@@ -1156,6 +1182,7 @@
 		width: 100%;
 		height: 54px;
 		line-height: 54px;
+		filter: drop-shadow(0 5px 5px black);
 		background-color: #1c1c1c;
 	}
 
