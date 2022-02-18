@@ -182,7 +182,7 @@ class MirageDB
                 SET imageids = array_append(boards.imageids, images.imageid) \
                 FROM images \
                     WHERE images.normalhash = $2 \
-                    AND images.imageid != ANY(boards.imageids) \
+                    AND NOT images.imageid = ANY(boards.imageids) \
                     AND boards.boardid = $1"
         }
     );  
@@ -506,17 +506,17 @@ class MirageDB
 
     async DeleteTag(tags: string)
     {
-        return this.pgdb.none(this.PSDeleteTag, [tags, tags]);
+        return this.pgdb.oneOrNone(this.PSDeleteTag, [`'${tags}'`, tags]);
     }
 
     async RenameTag(oldTag: string, newTag: string)
     {
-        return this.pgdb.none(this.PSRenameTag, [oldTag, newTag, oldTag]);
+        return this.pgdb.none(this.PSRenameTag, [`'${oldTag}'`, newTag, oldTag]);
     }   
 
     async AppendTag(query: string, newTag: string)
     {
-        return this.pgdb.none(this.PSAppendTag, [query, newTag]);
+        return this.pgdb.oneOrNone(this.PSAppendTag, [query, newTag]);
     }   
 
     async GetImagesByBoard(boarduid: number)

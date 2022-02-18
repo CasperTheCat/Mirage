@@ -1,7 +1,8 @@
 import sharp, { Sharp } from 'sharp';
 import crypto from "crypto";
-import { existsSync} from 'fs';
+import { existsSync, createReadStream} from 'fs';
 import type { MirageDB } from './db.js';
+import {TagArrayToString} from './tagHandler.js';
 import { readdir, readFile } from "fs/promises";
 import path from 'path';
 
@@ -26,10 +27,26 @@ import path from 'path';
 //     db.AddImage(normalhash, new Buffer(""), width, height, path, "");
 // }
 
+function IntHashFile(path: string): Promise<Buffer>
+{
+    return new Promise<Buffer>(function (resolve, reject)
+    {
+    
+        let hash = crypto.createHash("SHA512-256");
+
+        const stream = createReadStream(path);
+        stream.on('error', err => reject(err));
+        stream.on('data', chunk => hash.update(chunk));
+        stream.on('end', () => resolve(hash.digest()));
+    });
+}
+
 async function HashFile(path: string)
 {
+    
     try
     {
+        return await IntHashFile(path);
         let hash = crypto.createHash("SHA512-256");
 
         let fileData = await readFile(path);
@@ -141,7 +158,15 @@ async function CheckFolder(check: string, db: MirageDB, root: string, imageList:
                     //     cleanTags.push(SanitiseTag(uncleanTag))
                     // }
 
-                    let prelimTags = GetPrelimTags(rlpath).join(" ");//    let prelimTags = cleanTags.join(" ");
+                    let preLim = GetPrelimTags(rlpath);
+                    let temp = [];
+
+                    for (let plt = 0; plt < preLim.length; ++plt)
+                    {
+                        temp.push(`'${preLim[plt]}'`);
+                    }
+
+                    let prelimTags = "";//temp.join(" ");// GetPrelimTags(rlpath).join(" ");//    let prelimTags = cleanTags.join(" ");
 
                     let result = await db.GetImageByHash(imageHash);
 

@@ -473,7 +473,7 @@
 			// Treat as
 			if (selectedTagControl !== undefined && selectedNewTagName !== undefined && selectedNewTagName !== "")
 			{
-				let fetchable = await fetch('/api/image/tag/append',
+				let fetchable = await fetch('/api/image/tag/applyquery',
 				{
 					method: 'POST',
 					headers: {
@@ -1126,7 +1126,7 @@
 			<p>Applied to {selectedTagCount} { selectedTagCount == 1 ? "entry" : "entries"}</p>
 			<textarea bind:value={selectedNewTagName} rows="1"></textarea>
 			<button on:click={HandleViewTag}>View Tag</button>
-			<button on:click={HandleWantAppendTag}>Apply Query to Tag</button>
+			<button on:click={HandleWantAppendTag}>Apply to Tag</button>
 			<button on:click={HandleWantApplyToQuery}>Apply Tag to Query</button>
 			<br>
 			<button on:click={HandleWantDeleteTag}>Delete Tag</button>

@@ -13,6 +13,7 @@ import { readFile } from "fs/promises";
 import { IngestImageFromPath, CheckFolder, DiscardOrMark, SanitiseTag,  GetPrelimTags } from "./imageHandler.js";
 import {InitDB} from "./init/db.js";
 import {InitAuthStrat} from "./init/auth.js";
+import {TagArrayToString} from "./tagHandler.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -88,7 +89,7 @@ async function entry()
 
     {
         await MarkImages();
-        CheckImages();
+        //CheckImages();
     }
 
     // Queue Sweep two hourly
@@ -301,7 +302,9 @@ async function entry()
                 let tags: string[] = req.body;
                 for (let tag of tags)
                 {
-                    mirageDB.DeleteTag(tag);
+                    //
+                    let sanitag = SanitiseTag(tag);
+                    mirageDB.DeleteTag(sanitag);
                 }
                 
                 res.status(200).send();
@@ -349,7 +352,7 @@ async function entry()
         }
     );
 
-    app.post('/api/image/tag/append',  bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
+    app.post('/api/image/tag/applyquery',  bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
         async (req, res) => 
         {
             try
@@ -362,11 +365,47 @@ async function entry()
                         if (pair.length === 2)
                         {
                             let tsquery: string = SanitiseTag(pair[0], true);
-                            let newTag: string = SanitiseTag(pair[1], true);
+                            let newTag: string = SanitiseTag(pair[1], false);
 
                             console.log(tsquery, newTag);
 
                             mirageDB.AppendTag(tsquery, newTag);
+                        }
+                    }
+                    res.status(200).send();
+                }
+                else
+                {
+                    res.status(404).send("{ \"code\": 1, \"reason\": \"Exception\" }");
+                }
+
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(500).send("{ \"code\": 0, \"reason\": \"Exception\" }");
+            }
+        }
+    );
+
+    app.post('/api/image/tag/append',  bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let x = req.body;
+                if ("tagPairs" in req.body)
+                {
+                    for (let pair of req.body["tagPairs"])
+                    {
+                        if (pair.length === 2)
+                        {
+                            let targetTag: string = SanitiseTag(pair[0], false);
+                            let newTag: string = SanitiseTag(pair[1], false);
+
+                            console.log(targetTag, newTag);
+
+                            mirageDB.AppendTag(`'${targetTag}'`, newTag);
                         }
                     }
                     res.status(200).send();
