@@ -969,11 +969,50 @@
 				console.log(photos);
 			}
 
-			photos.sort((a,b) => {
-				let r1 = a["height"] / a["width"];
-				let r2 = b["height"] / b["width"];
-				return r2 - r1;
-			});
+			// New Mode
+			// Firstly, we want to segment photos into subarrays
+			let newPhotos = []
+
+			let npIndex = 0;
+			while (npIndex < photos.length)
+			{
+				// Subsegment
+				let tempArray = [];
+				
+				// Fill
+				let upperRange = Math.min(13, photos.length - npIndex);
+				for (let i = 0; i < upperRange; ++i)
+				{
+					tempArray.push(photos[npIndex + i]);
+				}
+
+				// Sort
+				tempArray.sort((a,b) => {
+					let r1 = a["height"] / a["width"];
+					let r2 = b["height"] / b["width"];
+					return r2 - r1;
+				});
+
+				// Append
+				for (let item of tempArray)
+                {
+					newPhotos.push(item);
+				}
+				//newPhotos.push(tempArray);
+
+				// Update npIndex
+				npIndex += upperRange;
+			}
+
+			photos = newPhotos;
+
+
+			// Below is optimal
+			//photos.sort((a,b) => {
+			//	let r1 = a["height"] / a["width"];
+			//	let r2 = b["height"] / b["width"];
+			//	return r2 - r1;
+			//});
 
 			// if (photos.length > 20)
 			// {
