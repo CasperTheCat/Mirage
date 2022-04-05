@@ -10,7 +10,7 @@ import {InsertNewUserToDB} from "./auth.js";
 import bodyParser from 'body-parser';
 import session from 'express-session';
 import { readFile } from "fs/promises";
-import { IngestImageFromPath, CheckFolder, DiscardOrMark, SanitiseTag,  GetPrelimTags } from "./imageHandler.js";
+import { DoesFileExist, IngestImageFromPath, CheckFolder, DiscardOrMark, SanitiseTag,  GetPrelimTags, RuntimeGenerateThumbnail } from "./imageHandler.js";
 import {InitDB} from "./init/db.js";
 import {InitAuthStrat} from "./init/auth.js";
 import {TagArrayToString} from "./tagHandler.js";
@@ -19,6 +19,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const __imagePath = path.resolve(__dirname, "../images");
 const __cacheRoot = path.resolve(__dirname, "../cache");
+const __overlayPath = path.resolve(__dirname, "../src/overlay.png");
 
 async function entry()
 {
@@ -90,7 +91,7 @@ async function entry()
 
     {
         await MarkImages();
-        //CheckImages();
+        CheckImages();
     }
 
     // Queue Sweep two hourly
@@ -596,6 +597,53 @@ async function entry()
 
                     // Mark
                     console.log(`[WARN] Marking ${y} as dead.`)
+                    mirageDB.MarkImageDeletedHash(y);
+                }
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(500).send();
+            }
+        }
+    );
+
+    app.get("/api/image/tn/:id", ensureLoggedIn(),
+        async (req, res) =>
+        {
+            try
+            {
+                let y = Buffer.from(req.params.id, 'hex');
+
+                // Try to get the path
+                let rootName = path.resolve(__cacheRoot, "tn", req.params.id + ".webp");
+                let doesCacheExist = await DoesFileExist(rootName);
+
+                if (doesCacheExist)
+                {
+                    res.sendFile(rootName);
+                }
+                else
+                {
+                    // Generate on the fly
+                    let result = await RuntimeGenerateThumbnail(y, __cacheRoot, mirageDB, __imagePath, __overlayPath);
+
+                    // Second Chance
+                    if (result)
+                    {
+                        doesCacheExist = await DoesFileExist(rootName);
+                        if (doesCacheExist)
+                        {
+                            res.sendFile(rootName);
+                            return;
+                        }
+                    }
+
+                    // Mark deleted
+                    res.status(404).send();
+
+                    // Mark
+                    console.log(`[WARN] Marking ${req.params.id} as dead?`)
                     mirageDB.MarkImageDeletedHash(y);
                 }
             }
