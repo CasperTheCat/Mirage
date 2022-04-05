@@ -4,7 +4,10 @@ import { existsSync, createReadStream} from 'fs';
 import type { MirageDB } from './db.js';
 import {TagArrayToString} from './tagHandler.js';
 import { readdir, readFile } from "fs/promises";
+import ffmpeg from "fluent-ffmpeg";
 import path from 'path';
+
+const videoTypes = ['.mkv', '.avi', '.mp4', '.webm', '.mov', ".ts"];
 
 // async function IngestImageFromBuffer(image: Buffer, db: MirageDB)
 // {
@@ -108,7 +111,7 @@ async function DiscardOrMark(root: string, db: MirageDB)
     }
 }
 
-async function CheckFolder(check: string, db: MirageDB, root: string, imageList: string[] = [])
+async function CheckFolder(check: string, db: MirageDB, root: string, cache: string, imageList: string[] = [])
 {
     let countProcessed = 0;
 
@@ -141,7 +144,7 @@ async function CheckFolder(check: string, db: MirageDB, root: string, imageList:
                 }
                 else if (item.isDirectory())
                 {
-                    countProcessed += await CheckFolder(itemPath, db, root, imageList);
+                    countProcessed += await CheckFolder(itemPath, db, root, cache, imageList);
                 }
                 else if (item.isFile())
                 {
@@ -188,7 +191,19 @@ async function CheckFolder(check: string, db: MirageDB, root: string, imageList:
                     else
                     {
                         console.log(`[INFO] Ingesting ${rlpath}`);
-                        await IngestImage(root, rlpath, imageHash, db, prelimTags);
+                        let extension = path.extname(itemPath);
+
+                        console.log(`[INFO] Ingestingext ${extension}`);
+                        
+                        if (videoTypes.indexOf(extension.toLowerCase()) >= 0)
+                        {
+                            console.log(`[INFO] VIngesting ${rlpath}`);
+                            await IngestVideo(root, rlpath, imageHash, cache, db, prelimTags);
+                        }
+                        else
+                        {
+                            await IngestImage(root, rlpath, imageHash, cache, db, prelimTags);
+                        }
                     }
 
                     ++countProcessed;
@@ -201,7 +216,7 @@ async function CheckFolder(check: string, db: MirageDB, root: string, imageList:
             }
             catch (Exception)
             {
-
+                console.log(`[INFO] Exception ${Exception}`);
             }
         }
     }
@@ -212,7 +227,55 @@ async function CheckFolder(check: string, db: MirageDB, root: string, imageList:
     
 }
 
-async function IngestImage(root: string, relpath: string, normalhash: Buffer, db: MirageDB, prelimTags: string = "")
+// Bad old code from 07
+async function generateVideoThumbnail(uri, root, hash)
+{
+    return new Promise((res, rej) => {
+        ffmpeg(uri)
+            // .on('filenames', (fn) =>{
+            //     console.log("generating: " + fn);
+            // })
+            .on('end', () => {
+                //console.log("End on: " + hash + " " + uri);
+
+                res(hash);
+
+            })
+            .screenshots({folder: root + "/video/", filename: hash, count: 1, timemarks: ["25%"]})
+            .on('error', (re) => {
+                rej(re);
+            });
+            ;
+    });
+}
+
+
+
+async function IngestVideo(root: string, relpath: string, normalhash: Buffer, cache: string, db: MirageDB, prelimTags: string = "")
+{
+    const loadPath = path.resolve(root, relpath);
+
+    // Load into ffmpeg
+    //let videoIngester = ffmpeg(loadPath);
+    //await videoIngester.screenshots({folder: cache, filename: normalhash.toString("hex"), count: 1, timemarks: ["25%"]});
+
+    console.log(`[INFO] VIngesting to ${cache}`);
+
+    await generateVideoThumbnail(loadPath, cache, normalhash.toString("hex"));
+
+    console.log(`[INFO] LogicIngesting ${cache}`);
+
+    let imageBuffer: Sharp = sharp(cache + normalhash.toString("hex"));
+
+    let meta = await imageBuffer.metadata();
+
+    let width = meta.width;
+    let height = meta.height;
+
+    //db.AddImage(normalhash, Buffer.from(""), width, height, relpath, prelimTags);
+}
+
+async function IngestImage(root: string, relpath: string, normalhash: Buffer, cache: string, db: MirageDB, prelimTags: string = "")
 {
     const loadPath = path.resolve(root, relpath);
     let imageBuffer: Sharp = sharp(loadPath);

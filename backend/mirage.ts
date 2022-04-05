@@ -18,6 +18,7 @@ import {TagArrayToString} from "./tagHandler.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const __imagePath = path.resolve(__dirname, "../images");
+const __cacheRoot = path.resolve(__dirname, "../cache");
 
 async function entry()
 {
@@ -67,7 +68,7 @@ async function entry()
     async function CheckImages()
     {   
         let DiscardMarkTimeStart = process.hrtime();     
-        let checkedImages = await CheckFolder(__imagePath, mirageDB, __imagePath);
+        let checkedImages = await CheckFolder(__imagePath, mirageDB, __imagePath, __cacheRoot);
         let DiscardMarkTimeStop = process.hrtime(DiscardMarkTimeStart);
 
         console.log(`[INFO] Mirage checked ${checkedImages} files in ${DiscardMarkTimeStop[0] + DiscardMarkTimeStop[1] * 1e-9 } seconds.`);        
