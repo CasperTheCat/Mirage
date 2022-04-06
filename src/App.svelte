@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { waitForDebugger } from 'inspector';
-	import { tick } from 'svelte';
+	// import { waitForDebugger } from 'inspector';
+	// import { tick } from 'svelte';
 	import { onMount } from 'svelte';
-	import { beforeUpdate, afterUpdate } from 'svelte';
+	// import { beforeUpdate, afterUpdate } from 'svelte';
 	import Modal from './Modal.svelte';
 	import Card from "./Card.svelte";
 	import Image from "./Image.svelte";

@@ -1,4 +1,5 @@
-import sharp, { Sharp } from 'sharp';
+import sharp from 'sharp';
+import type { Sharp } from 'sharp';
 import crypto from "crypto";
 import {existsSync, createReadStream} from 'fs';
 import type { MirageDB } from './db.js';
@@ -320,13 +321,11 @@ async function RuntimeGenerateThumbnail(hash: Buffer, cache: string, db: MirageD
         await mkdir(hexPath.path, { recursive: true});
         //const filePath = cache + "/tn/" + hashname + ".webp";
 
-        console.log(`[DEBUG] RuntimeGenerateThumbnail ${filePath}`);
-
         // Check Existance
         let existsTn = await DoesFileExist(filePath);
         if (!existsTn)
         {
-            console.log(`[INFO] Creating cache entry for ${hashname}`);
+            console.log(`[INFO][Cache] ${hashname}`);
 
             // Ask DB for the real path to create for
 
