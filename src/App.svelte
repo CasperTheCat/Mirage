@@ -56,6 +56,19 @@
 
 	let KeyStateLive:boolean = false;
 
+	async function HandleViewOriginal()
+	{
+		try
+		{
+			let location = "/api/image/data/" + listedHash;
+			window.open(location);
+		}
+		catch (Exception)
+		{
+
+		}
+	}
+
 	async function HandleRemoveFromBoard()
 	{
 		try
@@ -1189,6 +1202,7 @@
 			<textarea bind:value={editTagString} rows="15"></textarea>
 			<button on:click={HandleSubmitNewTags}>Save Tags</button>
 			<button on:click={HandleSuggestTags}>Suggest</button>
+			<button on:click={HandleViewOriginal}>View</button>
 
 			
 		</Modal>

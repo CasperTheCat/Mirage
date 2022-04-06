@@ -1,10 +1,13 @@
 import sharp, { Sharp } from 'sharp';
 import crypto from "crypto";
-import { existsSync, createReadStream} from 'fs';
+import {existsSync, createReadStream} from 'fs';
 import type { MirageDB } from './db.js';
 import {TagArrayToString} from './tagHandler.js';
-import { readdir, readFile } from "fs/promises";
+import { mkdir, readdir, readFile, stat, unlink } from "fs/promises";
+import ffmpeg from "fluent-ffmpeg";
 import path from 'path';
+
+const videoTypes = ['.mkv', '.avi', '.mp4', '.webm', '.mov', ".ts"];
 
 // async function IngestImageFromBuffer(image: Buffer, db: MirageDB)
 // {
@@ -108,7 +111,7 @@ async function DiscardOrMark(root: string, db: MirageDB)
     }
 }
 
-async function CheckFolder(check: string, db: MirageDB, root: string, imageList: string[] = [])
+async function CheckFolder(check: string, db: MirageDB, root: string, cache: string, imageList: string[] = [])
 {
     let countProcessed = 0;
 
@@ -141,7 +144,7 @@ async function CheckFolder(check: string, db: MirageDB, root: string, imageList:
                 }
                 else if (item.isDirectory())
                 {
-                    countProcessed += await CheckFolder(itemPath, db, root, imageList);
+                    countProcessed += await CheckFolder(itemPath, db, root, cache, imageList);
                 }
                 else if (item.isFile())
                 {
@@ -187,8 +190,18 @@ async function CheckFolder(check: string, db: MirageDB, root: string, imageList:
                     }
                     else
                     {
-                        console.log(`[INFO] Ingesting ${rlpath}`);
-                        await IngestImage(root, rlpath, imageHash, db, prelimTags);
+                        let extension = path.extname(itemPath);
+                        
+                        if (videoTypes.indexOf(extension.toLowerCase()) >= 0)
+                        {
+                            console.log(`[INFO] Ingesting Video ${rlpath}`);
+                            await IngestVideo(root, rlpath, imageHash, cache, db, prelimTags);
+                        }
+                        else
+                        {
+                            console.log(`[INFO] Ingesting Image ${rlpath}`);
+                            await IngestImage(root, rlpath, imageHash, cache, db, prelimTags);
+                        }
                     }
 
                     ++countProcessed;
@@ -201,7 +214,7 @@ async function CheckFolder(check: string, db: MirageDB, root: string, imageList:
             }
             catch (Exception)
             {
-
+                console.log(`[INFO] Exception ${Exception}`);
             }
         }
     }
@@ -212,7 +225,178 @@ async function CheckFolder(check: string, db: MirageDB, root: string, imageList:
     
 }
 
-async function IngestImage(root: string, relpath: string, normalhash: Buffer, db: MirageDB, prelimTags: string = "")
+async function HexHashToFilesystem(base: string, hex: string, ext: string)
+{
+    // We go 8 folders deep in twos
+    let fDepth: number = 8;
+    let nPerFolder: number = 2;
+    let modifiedPath: string = "";
+
+    for(let i = 0; i < fDepth; ++i)
+    {
+        modifiedPath = modifiedPath + hex.slice(i * nPerFolder, (i+1)*nPerFolder) + "/";// hex[i*2] + hex[i*2 + 1]);
+    }
+
+    // Trailing Slash on base?
+    let correctedBase: string = base;
+    if(base.length > 1 && base[base.length -1] != "/")
+    {
+        correctedBase += "/";
+    }
+
+    modifiedPath = base + modifiedPath;
+    let modifiedFileName: string = hex.slice(fDepth * nPerFolder) + ext;
+
+    return { path: modifiedPath, filename: modifiedFileName};
+}
+
+// Bad old code from 07
+async function GenerateVideoThumbnail(uri, root, hash)
+{
+    let writeLocation: string = root + "/video/";
+    let cachedWrite = await HexHashToFilesystem(writeLocation, hash, "");
+    await mkdir(cachedWrite.path, { recursive: true});
+
+    return new Promise((res, rej) => {
+        ffmpeg(uri)
+            // .on('filenames', (fn) =>{
+            //     console.log("generating: " + fn);
+            // })
+            .on('end', () => {
+                //console.log("End on: " + hash + " " + uri);
+                res(hash);
+
+            })
+            .screenshots({folder: cachedWrite.path, filename: cachedWrite.filename, count: 1, timemarks: ["25%"]})
+            .on('error', (re) => {
+                rej(re);
+            });
+            ;
+    });
+}
+
+async function DoesFileExist(name: string)
+{
+    try
+    {
+        const fst = await stat(name);
+        return fst.isFile();
+    }
+    catch (Exception)
+    {
+        //console.log(`[INFO] DoesFileExist Exception ${Exception}`);
+    }
+    return false;
+}
+
+async function GenerateThumbnail(sharp: Sharp, cache: string, hashname: string)
+{
+    console.log(`[INFO] Caching ${hashname}`);
+    const filePath = cache + "/tn/" + hashname + ".webp";
+
+    // Check Existance
+    let existsTn = await DoesFileExist(filePath);
+    if (!existsTn)
+    {
+        console.log(`[INFO] Cache creation for ${hashname}`);
+        await sharp.clone().resize({width: 500}).webp({ quality: 100 }).toFile(filePath);
+    }
+    else
+    {
+        console.log(`[INFO] Cache exists for ${hashname}`);
+    }
+}
+
+async function RuntimeGenerateThumbnail(hash: Buffer, cache: string, db: MirageDB, rootPath: string, watermarkPath: string)
+{
+    try
+    {
+        let hashname = hash.toString("hex");
+        //console.log(`[INFO] JIT Caching ${hashname}`);
+        const hexPath = await HexHashToFilesystem(cache + "/tn/", hashname, ".webp");
+        const filePath = hexPath.path + hexPath.filename;
+
+        // Create path
+        await mkdir(hexPath.path, { recursive: true});
+        //const filePath = cache + "/tn/" + hashname + ".webp";
+
+        console.log(`[DEBUG] RuntimeGenerateThumbnail ${filePath}`);
+
+        // Check Existance
+        let existsTn = await DoesFileExist(filePath);
+        if (!existsTn)
+        {
+            console.log(`[INFO] Creating cache entry for ${hashname}`);
+
+            // Ask DB for the real path to create for
+
+            let x = await db.GetImagePathByHash(hash);
+            let loadPath = x["path"];
+
+            let dbCanonPath = path.resolve(rootPath, loadPath);
+            let existsCanon = await DoesFileExist(dbCanonPath);
+
+            if (existsCanon)
+            {
+                let extension = path.extname(dbCanonPath);
+
+                if (videoTypes.indexOf(extension.toLowerCase()) >= 0)
+                {
+                    await GenerateVideoThumbnail(dbCanonPath, cache, hashname);
+
+                    //const genCacheName = cache + "/video/" + hashname + ".png";
+                    const genCache = await HexHashToFilesystem(cache + "/video/", hashname, ".png");
+                    const genCacheName = genCache.path + genCache.filename;
+
+                    let imageBuffer: Sharp = sharp(genCacheName);
+                    await imageBuffer.resize({width: 500}).composite([{ input: watermarkPath, gravity: 'south', blend: "over" }]).webp({ quality: 80 }).toFile(filePath);
+
+                    //await unlink(genCacheName);
+                }
+                else
+                {
+                    let imageBuffer: Sharp = sharp(dbCanonPath, { animated: true });
+                    await imageBuffer.resize({width: 500}).webp({ quality: 80 }).toFile(filePath);
+                }
+                return true;
+            }
+        }
+        else
+        {
+            console.log(`[INFO] Cache exists for ${hashname}`);
+        }
+    }
+    catch (Exception)
+    {
+        console.log(`[EXCP] RuntimeGenerateThumbnail Exception ${Exception}`);
+    }
+
+    return false;
+}
+
+async function IngestVideo(root: string, relpath: string, normalhash: Buffer, cache: string, db: MirageDB, prelimTags: string = "")
+{
+    const loadPath = path.resolve(root, relpath);
+    const hashHex = normalhash.toString("hex");
+    const genCacheName = cache + "/video/" + hashHex + ".png";
+
+    await GenerateVideoThumbnail(loadPath, cache, hashHex);
+
+    let imageBuffer: Sharp = sharp(genCacheName);
+
+    let meta = await imageBuffer.metadata();
+
+    let width = meta.width;
+    let height = meta.height;
+
+    //await GenerateThumbnail(imageBuffer, cache, hashHex);
+    //await unlink(genCacheName);
+
+    // What we could do is add the video here. With newtab opening the original, we would be fine
+    db.AddImage(normalhash, Buffer.from(""), width, height, relpath, prelimTags);
+}
+
+async function IngestImage(root: string, relpath: string, normalhash: Buffer, cache: string, db: MirageDB, prelimTags: string = "")
 {
     const loadPath = path.resolve(root, relpath);
     let imageBuffer: Sharp = sharp(loadPath);
@@ -221,6 +405,8 @@ async function IngestImage(root: string, relpath: string, normalhash: Buffer, db
 
     let width = meta.width;
     let height = meta.height;
+
+    //await GenerateThumbnail(imageBuffer, cache, normalhash.toString("hex"));
 
     db.AddImage(normalhash, Buffer.from(""), width, height, relpath, prelimTags);
 }
@@ -258,4 +444,4 @@ function SanitiseTag(tag: string, lowerOnly: boolean = false)
 }
 
 
-export {IngestImageFromPath, CheckFolder, DiscardOrMark, SanitiseTag, GetPrelimTags};
+export { HexHashToFilesystem, IngestImageFromPath, CheckFolder, DiscardOrMark, SanitiseTag, GetPrelimTags, DoesFileExist, RuntimeGenerateThumbnail};

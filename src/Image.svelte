@@ -26,7 +26,7 @@
     }
 </script>
 
-<img src="/api/image/data/{hash}" alt="" on:click={HandleImageSummon}>
+<img src="/api/image/tn/{hash}" alt="" on:click={HandleImageSummon}>
 
 <style>
 	img {
