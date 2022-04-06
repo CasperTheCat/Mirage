@@ -3,7 +3,7 @@ import crypto from "crypto";
 import {existsSync, createReadStream} from 'fs';
 import type { MirageDB } from './db.js';
 import {TagArrayToString} from './tagHandler.js';
-import { readdir, readFile, stat, unlink } from "fs/promises";
+import { mkdir, readdir, readFile, stat, unlink } from "fs/promises";
 import ffmpeg from "fluent-ffmpeg";
 import path from 'path';
 
@@ -225,9 +225,38 @@ async function CheckFolder(check: string, db: MirageDB, root: string, cache: str
     
 }
 
+async function HexHashToFilesystem(base: string, hex: string, ext: string)
+{
+    // We go 8 folders deep in twos
+    let fDepth: number = 8;
+    let nPerFolder: number = 2;
+    let modifiedPath: string = "";
+
+    for(let i = 0; i < fDepth; ++i)
+    {
+        modifiedPath = modifiedPath + hex.slice(i * nPerFolder, (i+1)*nPerFolder) + "/";// hex[i*2] + hex[i*2 + 1]);
+    }
+
+    // Trailing Slash on base?
+    let correctedBase: string = base;
+    if(base.length > 1 && base[base.length -1] != "/")
+    {
+        correctedBase += "/";
+    }
+
+    modifiedPath = base + modifiedPath;
+    let modifiedFileName: string = hex.slice(fDepth * nPerFolder) + ext;
+
+    return { path: modifiedPath, filename: modifiedFileName};
+}
+
 // Bad old code from 07
 async function GenerateVideoThumbnail(uri, root, hash)
 {
+    let writeLocation: string = root + "/video/";
+    let cachedWrite = await HexHashToFilesystem(writeLocation, hash, "");
+    await mkdir(cachedWrite.path, { recursive: true});
+
     return new Promise((res, rej) => {
         ffmpeg(uri)
             // .on('filenames', (fn) =>{
@@ -238,7 +267,7 @@ async function GenerateVideoThumbnail(uri, root, hash)
                 res(hash);
 
             })
-            .screenshots({folder: root + "/video/", filename: hash, count: 1, timemarks: ["25%"]})
+            .screenshots({folder: cachedWrite.path, filename: cachedWrite.filename, count: 1, timemarks: ["25%"]})
             .on('error', (re) => {
                 rej(re);
             });
@@ -255,26 +284,26 @@ async function DoesFileExist(name: string)
     }
     catch (Exception)
     {
-        console.log(`[INFO] DoesFileExist Exception ${Exception}`);
+        //console.log(`[INFO] DoesFileExist Exception ${Exception}`);
     }
     return false;
 }
 
 async function GenerateThumbnail(sharp: Sharp, cache: string, hashname: string)
 {
-    console.log(`[INFO] Caching ${cache}`);
+    console.log(`[INFO] Caching ${hashname}`);
     const filePath = cache + "/tn/" + hashname + ".webp";
 
     // Check Existance
     let existsTn = await DoesFileExist(filePath);
     if (!existsTn)
     {
-        console.log(`[INFO] Cache creation for ${cache}`);
+        console.log(`[INFO] Cache creation for ${hashname}`);
         await sharp.clone().resize({width: 500}).webp({ quality: 100 }).toFile(filePath);
     }
     else
     {
-        console.log(`[INFO] Cache exists for ${cache}`);
+        console.log(`[INFO] Cache exists for ${hashname}`);
     }
 }
 
@@ -283,14 +312,21 @@ async function RuntimeGenerateThumbnail(hash: Buffer, cache: string, db: MirageD
     try
     {
         let hashname = hash.toString("hex");
-        console.log(`[INFO] JIT Caching ${hashname}`);
-        const filePath = cache + "/tn/" + hashname + ".webp";
+        //console.log(`[INFO] JIT Caching ${hashname}`);
+        const hexPath = await HexHashToFilesystem(cache + "/tn/", hashname, ".webp");
+        const filePath = hexPath.path + hexPath.filename;
+
+        // Create path
+        await mkdir(hexPath.path, { recursive: true});
+        //const filePath = cache + "/tn/" + hashname + ".webp";
+
+        console.log(`[DEBUG] RuntimeGenerateThumbnail ${filePath}`);
 
         // Check Existance
         let existsTn = await DoesFileExist(filePath);
         if (!existsTn)
         {
-            console.log(`[INFO] Cache creation for ${cache}`);
+            console.log(`[INFO] Creating cache entry for ${hashname}`);
 
             // Ask DB for the real path to create for
 
@@ -308,29 +344,31 @@ async function RuntimeGenerateThumbnail(hash: Buffer, cache: string, db: MirageD
                 {
                     await GenerateVideoThumbnail(dbCanonPath, cache, hashname);
 
-                    const genCacheName = cache + "/video/" + hashname + ".png";
+                    //const genCacheName = cache + "/video/" + hashname + ".png";
+                    const genCache = await HexHashToFilesystem(cache + "/video/", hashname, ".png");
+                    const genCacheName = genCache.path + genCache.filename;
 
                     let imageBuffer: Sharp = sharp(genCacheName);
-                    await imageBuffer.resize({width: 500}).composite([{ input: watermarkPath, gravity: 'south', blend: "over" }]).webp({ quality: 100 }).toFile(filePath);
+                    await imageBuffer.resize({width: 500}).composite([{ input: watermarkPath, gravity: 'south', blend: "over" }]).webp({ quality: 80 }).toFile(filePath);
 
                     //await unlink(genCacheName);
                 }
                 else
                 {
-                    let imageBuffer: Sharp = sharp(dbCanonPath);
-                    await imageBuffer.resize({width: 500}).webp({ quality: 100 }).toFile(filePath);
+                    let imageBuffer: Sharp = sharp(dbCanonPath, { animated: true });
+                    await imageBuffer.resize({width: 500}).webp({ quality: 80 }).toFile(filePath);
                 }
                 return true;
             }
         }
         else
         {
-            console.log(`[INFO] ? Cache exists for ${hashname}`);
+            console.log(`[INFO] Cache exists for ${hashname}`);
         }
     }
     catch (Exception)
     {
-
+        console.log(`[EXCP] RuntimeGenerateThumbnail Exception ${Exception}`);
     }
 
     return false;
@@ -406,4 +444,4 @@ function SanitiseTag(tag: string, lowerOnly: boolean = false)
 }
 
 
-export {IngestImageFromPath, CheckFolder, DiscardOrMark, SanitiseTag, GetPrelimTags, DoesFileExist, RuntimeGenerateThumbnail};
+export { HexHashToFilesystem, IngestImageFromPath, CheckFolder, DiscardOrMark, SanitiseTag, GetPrelimTags, DoesFileExist, RuntimeGenerateThumbnail};

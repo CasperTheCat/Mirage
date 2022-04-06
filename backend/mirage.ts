@@ -10,7 +10,7 @@ import {InsertNewUserToDB} from "./auth.js";
 import bodyParser from 'body-parser';
 import session from 'express-session';
 import { readFile } from "fs/promises";
-import { DoesFileExist, IngestImageFromPath, CheckFolder, DiscardOrMark, SanitiseTag,  GetPrelimTags, RuntimeGenerateThumbnail } from "./imageHandler.js";
+import { HexHashToFilesystem, DoesFileExist, IngestImageFromPath, CheckFolder, DiscardOrMark, SanitiseTag,  GetPrelimTags, RuntimeGenerateThumbnail } from "./imageHandler.js";
 import {InitDB} from "./init/db.js";
 import {InitAuthStrat} from "./init/auth.js";
 import {TagArrayToString} from "./tagHandler.js";
@@ -616,7 +616,8 @@ async function entry()
                 let y = Buffer.from(req.params.id, 'hex');
 
                 // Try to get the path
-                let rootName = path.resolve(__cacheRoot, "tn", req.params.id + ".webp");
+                let rootCtrl = await HexHashToFilesystem(__cacheRoot + "/tn/", req.params.id, ".webp");
+                let rootName = rootCtrl.path + rootCtrl.filename;
                 let doesCacheExist = await DoesFileExist(rootName);
 
                 if (doesCacheExist)
