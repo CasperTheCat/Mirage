@@ -61,7 +61,7 @@ class MirageDB
 
     PSGetBoardsByUID = new PreparedStatement(
         {
-            name: "PSGetBoardReferencesByUID",
+            name: "PSGetBoardsByUID",
             text: "SELECT boards.boardid, boards.boardname FROM boards, user_board WHERE boards.boardid = user_board.boardid AND user_board.ownerid = $1"
         }
     );
