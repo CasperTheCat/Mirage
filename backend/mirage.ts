@@ -14,6 +14,7 @@ import { HexHashToFilesystem, DoesFileExist, IngestImageFromPath, CheckFolder, D
 import {InitDB} from "./init/db.js";
 import {InitAuthStrat} from "./init/auth.js";
 import {TagArrayToString} from "./tagHandler.js";
+import connectPgSimple, { type PGStoreOptions } from "connect-pg-simple";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -31,11 +32,6 @@ async function entry()
 
     let mirageDB: MirageDB = new MirageDB();
 
-
-    app.use(session({ secret: 'keyboard cat' }));
-    app.use(passport.initialize());
-    app.use(passport.session());
-
     try
     {
         await InitDB(mirageDB);   
@@ -48,6 +44,28 @@ async function entry()
         throw Exception;
     }
     
+    const StoreOptions: connectPgSimple.PGStoreOptions = {
+        pgPromise: mirageDB.pgdb,
+        tableName: 'session'
+      };
+
+    const connector = connectPgSimple(session);
+
+    app.use(session({
+        store: new connector(StoreOptions),
+          secret: ['test'],
+          cookie: {
+            secure: false,
+            httpOnly: true,
+            sameSite: true,
+            maxAge: 24 * 60 * 60 * 1000
+          },
+          saveUninitialized: true,
+          resave: false
+        }));
+    app.use(passport.initialize());
+    app.use(passport.session());
+
 
     InitAuthStrat(mirageDB).then
     (() => 
