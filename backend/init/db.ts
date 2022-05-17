@@ -11,6 +11,7 @@ async function InitDB(db: MirageDB, shouldDestroy: boolean = false)
         {
             await db.ClearDB();
         }
+        await db.InitialiseSession();
         await db.InitialiseAuth();
         await db.InitialiseUsers();
         await db.InitialiseBoards();
