@@ -377,7 +377,8 @@ async function IngestVideo(root: string, relpath: string, normalhash: Buffer, ca
 {
     const loadPath = path.resolve(root, relpath);
     const hashHex = normalhash.toString("hex");
-    const genCacheName = cache + "/video/" + hashHex + ".png";
+    const genCache = await HexHashToFilesystem(cache + "/video/", hashHex, ".png");
+    const genCacheName = genCache.path + genCache.filename;
 
     await GenerateVideoThumbnail(loadPath, cache, hashHex);
 
