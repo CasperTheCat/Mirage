@@ -682,7 +682,7 @@ async function entry()
                 let y = Buffer.from(req.params.id, 'hex');
                 let x = await mirageDB.GetImageByHashShort(y);
 
-                console.log(x);
+                //console.log(x);
                 
 
                 let z = {
@@ -893,12 +893,11 @@ async function entry()
                         // Good stuff
                         const hashes: string[] = entry["hashes"];
                         const boardid: number = entry["board"];
-                        console.log(boardid, hashes);
+                        //console.log(boardid, hashes);
 
                         for (let i = 0; i < hashes.length; ++i )
                         {
                             const hexhash: Buffer = Buffer.from(hashes[i], 'hex');
-                            console.log(hexhash);
                             await mirageDB.AddImageToBoard(boardid, hexhash);
                         }
                     }
