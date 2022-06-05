@@ -13,7 +13,7 @@ async function getBoardsForUser(req, res, db)
     try
     {
         let boardList = await db.GetBoardsByUID(req.user);
-        console.log(boardList);
+        //console.log(boardList);
 
         boardList = JSON.stringify(boardList);
 
