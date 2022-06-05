@@ -53,7 +53,10 @@ async function entry()
 
     app.use(session({
         store: new connector(StoreOptions),
-          secret: ['test'],
+          secret: [
+            process.env.SESSION_PRIMARY_SECRET,
+            process.env.SESSION_OLD_SECRET
+          ],
           cookie: {
             secure: false,
             httpOnly: true,
