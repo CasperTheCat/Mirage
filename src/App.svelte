@@ -33,6 +33,7 @@
 	let loadedPhotoCount = 0;
 	let SelectedBoardName = "";
 	let SelectedBoardID = 0; // Invalid. ID starts at 1
+	let AddToBoardID = 0; // Invalid. ID starts at 1
 	let TagSearchString: string = "Query";
 	let bShouldDisplay: boolean = false;
 
@@ -117,7 +118,7 @@
   				body: JSON.stringify(
 					[
 						{
-						  "board": SelectedBoardID,
+						  "board": AddToBoardID,
 						  "hashes": [listedHash]
 						}
 					]  
@@ -1191,7 +1192,7 @@
 			</h2>
 			<!-- <input bind:value={SelectedBoardID} type="number" min="1"> -->
 			<span class="centering">
-			<select bind:value={SelectedBoardID}>
+			<select bind:value={AddToBoardID}>
 				{#each userBoards as brds}
 					<option value={brds.boardid}>{brds.boardname}</option>
 				{/each}
