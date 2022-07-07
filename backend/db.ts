@@ -111,14 +111,14 @@ class MirageDB
     PSGetImageByTag = new PreparedStatement(
         {
             name: "PSGetImageByTag",
-            text: "SELECT * FROM images WHERE live = true AND tags @@ $1::tsquery"
+            text: "SELECT * FROM images WHERE live = true AND tags @@ $1::tsquery ORDER BY normalhash ASC"
         }
     );
 
     PSGetImageByTagShort = new PreparedStatement(
         {
             name: "PSGetImageByTagShort",
-            text: "SELECT height, width, normalhash FROM images WHERE live = true AND tags @@ $1::tsquery"
+            text: "SELECT height, width, normalhash FROM images WHERE live = true AND tags @@ $1::tsquery ORDER BY normalhash ASC"
         }
     );
 
@@ -268,21 +268,21 @@ class MirageDB
     PSGetImagesByBoard = new PreparedStatement(
         {
             name: "PSGetImagesByBoard",
-            text: "SELECT images.* FROM images, boards WHERE images.live = true AND images.imageid = ANY(boards.imageids) AND boards.boardid = $1"
+            text: "SELECT images.* FROM images, boards WHERE images.live = true AND images.imageid = ANY(boards.imageids) AND boards.boardid = $1 ORDER BY images.normalhash ASC"
         }
     );
 
     PSGetImagesByBoardShort = new PreparedStatement(
         {
             name: "PSGetImagesByBoardShort",
-            text: "SELECT images.width, images.height, images.normalhash FROM images, boards WHERE images.live = true AND images.imageid = ANY(boards.imageids) AND boards.boardid = $1"
+            text: "SELECT images.width, images.height, images.normalhash FROM images, boards WHERE images.live = true AND images.imageid = ANY(boards.imageids) AND boards.boardid = $1 ORDER BY images.normalhash ASC"
         }
     );
 
     PSGetImagesByBoardSearchShort = new PreparedStatement(
         {
             name: "PSGetImagesByBoardSearchShort",
-            text: "SELECT images.width, images.height, images.normalhash FROM images, boards WHERE images.live = true AND images.imageid = ANY(boards.imageids) AND images.tags @@ $1::tsquery AND boards.boardid = $2"
+            text: "SELECT images.width, images.height, images.normalhash FROM images, boards WHERE images.live = true AND images.imageid = ANY(boards.imageids) AND images.tags @@ $1::tsquery AND boards.boardid = $2 ORDER BY images.normalhash ASC"
         }
     );
 
