@@ -1,6 +1,6 @@
 {
   "name": "Mirage",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "main": "build/mirage.js",
   "type": "module",
@@ -21,7 +21,7 @@
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^21.0.0",
+    "@rollup/plugin-commonjs": "^22.0.0",
     "@rollup/plugin-node-resolve": "^13.0.0",
     "@rollup/plugin-typescript": "^8.0.0",
     "@tsconfig/svelte": "^3.0.0",
@@ -31,7 +31,7 @@
     "@types/express": "^4.17.13",
     "@types/express-session": "^1.17.4",
     "@types/fluent-ffmpeg": "^2.1.20",
-    "@types/node": "^17.0.0",
+    "@types/node": "^18.0.0",
     "@types/passport": "^1.0.7",
     "@types/sharp": "^0.30.0",
     "gts": "^3.1.0",
@@ -54,7 +54,7 @@
     "express": "^4.17.1",
     "express-session": "^1.17.2",
     "fluent-ffmpeg": "^2.1.2",
-    "passport": "^0.5.0",
+    "passport": "^0.6.0",
     "passport-local": "^1.0.0",
     "pg-promise": "^10.11.1",
     "sharp": "^0.30.0"

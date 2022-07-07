@@ -307,6 +307,13 @@ class MirageDB
         }
     );
 
+    PSGetUntaggedImagesSortedLimited = new PreparedStatement(
+        {
+            name: "PSGetUntaggedImagesSortedLimited",
+            text: "SELECT height, width, normalhash FROM images WHERE live = true AND tags = '' ORDER BY normalhash ASC LIMIT 250"
+        }
+    );
+
     PSGetTagList = new PreparedStatement(
         {
             name: "PSGetTagList",
@@ -593,6 +600,11 @@ class MirageDB
     async GetUntaggedImages()
     {
         return this.pgdb.manyOrNone(this.PSGetUntaggedImages, []);
+    }
+
+    async GetUntaggedImagesSortedLimited()
+    {
+        return this.pgdb.manyOrNone(this.PSGetUntaggedImagesSortedLimited, []);
     }
 
     async GetTagList()

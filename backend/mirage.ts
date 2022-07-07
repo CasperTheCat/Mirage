@@ -140,8 +140,13 @@ async function entry()
     app.get('/logout', 
     (req, res) =>
         {
-            req.logout();
-            res.redirect('/');
+            req.logout((err) => {
+                if (!err)
+                {
+                    res.redirect('/');
+                }
+              });
+            //res.redirect('/');
         }
     );
 
@@ -201,6 +206,38 @@ async function entry()
         {
             getBoardsForUser(req, res, mirageDB);
         } 
+    );
+
+    app.get("/api/search/image/restricted", ensureLoggedIn(),
+        async (req, res) =>
+        {
+            try
+            {
+                //let a = await mirageDB.GetAllImages();
+                let a = await mirageDB.GetUntaggedImagesSortedLimited();
+                let out = Array(a.length);
+
+                for (let i = 0; i < a.length; ++i)
+                {
+                    out[i] = {
+                        "width": a[i]["width"],
+                        "height": a[i]["height"],
+                        "hash": `${a[i]["normalhash"].toString('hex')}`
+                    };
+                }
+
+                res.status(200).send(
+                    {
+                        "images": out
+                    }
+                );
+
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+            }
+        }
     );
 
     app.get("/api/search/image", ensureLoggedIn(), 

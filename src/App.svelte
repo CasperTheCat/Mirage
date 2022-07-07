@@ -804,7 +804,27 @@
 			ResetSearchState();
 			showModal = false;
 		}
-		
+	}
+
+	async function SwitchToTaggerLimitedSelect()
+	{
+		try
+		{
+			await LoadImages("/api/search/image/restricted")
+			bShouldDisplay = true;
+			console.log(photos);
+			PageState = EState_TagUntagView;
+		}
+		catch (Exception)
+		{
+			PageState = EState_FrontPage;
+		}
+		finally
+		{
+			//ResetState();
+			ResetSearchState();
+			showModal = false;
+		}
 	}
 
 	async function SwitchToBoardManSelect()
@@ -1155,6 +1175,7 @@
 				<Card on:summon={SwitchToBoardSelect} name="Boards"/>
 				<Card on:summon={SwitchToSearchView} name="Search"/>
 				<Card on:summon={SwitchToTaggerSelect} name="Untagged"/>
+				<Card on:summon={SwitchToTaggerLimitedSelect} name="Limited Tags"/>
 				<Card on:summon={SwitchToTagManSelect} name="Tag Management"/>
 				<Card on:summon={SwitchToBoardManSelect} name="Board Management"/>
 			</div>
