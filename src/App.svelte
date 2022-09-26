@@ -13,6 +13,8 @@
 	let userBoards = [];
 	let newBoardName: string = "";
 	let editTagString: string = "";
+	let speedBaseTag: string = "";
+	let speedExtraTag: string = "";
 	let listedModalX: number = 0;
 	let listedModalY: number = 0;
 	let listedHash: string = "";
@@ -48,6 +50,7 @@
 	const EState_SearchView = 3;
 	const EState_TagUntagView = 4;
 	const EState_TagManView = 5;
+	const EState_SpeedTagView = 6;
 
 	const EStateModal_Normal = 0;
 	const EStateModal_Confirm = 1;
@@ -189,6 +192,77 @@
 		finally
 		{
 			await LoadBoards();
+		}
+	}
+
+	async function HandleSpeedTagShow()
+	{
+		//speedBaseTag
+		//speedExtraTag
+
+		try
+		{
+			await LoadImages(`/api/tools/speedtag/show/${speedBaseTag}`);
+			bShouldDisplay = true;
+		}
+		catch (Exception)
+		{
+
+		}
+		finally
+		{
+
+		}
+	}
+
+	async function HandleSpeedTagCommit()
+	{
+		//speedBaseTag
+		//speedExtraTag
+
+		try
+		{
+			let tgs = speedExtraTag.split("\n");
+
+			// for (let i = 0; i < tgs.length; ++i)
+			// {
+			// 	tgs[i] = `'${tgs[i]}'`
+			// }
+
+			// Remove nulls. Backend should do this too, but why not make it easier
+			tgs = tgs.filter(e=>e);
+
+			let localPhotos = [];
+			for (let i = 0; i < photos.length; ++i)
+			{
+				localPhotos.push(photos[i]["hash"]);
+			}
+
+
+			let fetchable = await fetch(`/api/tools/speedtag/commit`,
+			{
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json;charset=utf-8'
+				},
+				body: JSON.stringify(
+					[
+						{
+						  "baseTag": speedBaseTag,
+						  "extraTags": tgs,
+						  "loadedImages": localPhotos
+						}
+					]  
+				  )
+			});
+		}
+		catch (Exception)
+		{
+
+		}
+		finally
+		{
+			bShouldDisplay = true;
 		}
 	}
 
@@ -832,6 +906,24 @@
 		
 	}
 
+	async function SwitchToSpeedTagger()
+	{
+		try
+		{
+			bShouldDisplay = false;
+			PageState = EState_SpeedTagView;
+		}
+		catch (Exception)
+		{
+			PageState = EState_FrontPage;
+		}
+		finally
+		{
+			ResetSearchState();
+			showModal = false;
+		}
+	}
+
 	async function SwitchToTagManSelect()
 	{
 		try
@@ -977,7 +1069,7 @@
 		}
 	}
 
-	async function LoadImages(path:string, override: boolean = false)
+	async function LoadImages(path: string, override: boolean = false)
 	{
 		// Go ahead and check we're even in the correct state
 		// if (
@@ -1136,12 +1228,25 @@
 				<br>
 				<br>
 			</div>
+		{:else if PageState === EState_SpeedTagView}
+			<div>
+				<br>
+				<h2>Speed Tag View</h2>
+				<br>
+				<h3>Show Boards</h3>
+				<input bind:value={speedBaseTag} placeholder="Untagged Base">
+				<input type="submit" value="Show" on:click={HandleSpeedTagShow}/>
+				<input type="submit" value="Commit" on:click={HandleSpeedTagCommit}/>
+				<br>
+				<br>
+			</div>
 		{/if}
 
 		{#if (
 			PageState === EState_SearchView || 
 			PageState === EState_BoardView || 
-			PageState === EState_TagUntagView 
+			PageState === EState_TagUntagView || 
+			PageState === EState_SpeedTagView
 			)}
 			<!-- && loadedPhotoCount > 0} -->
 			{#if (bShouldDisplay && loadedPhotoCount > 0)}
@@ -1178,6 +1283,7 @@
 				<Card on:summon={SwitchToTaggerLimitedSelect} name="Limited Tags"/>
 				<Card on:summon={SwitchToTagManSelect} name="Tag Management"/>
 				<Card on:summon={SwitchToBoardManSelect} name="Board Management"/>
+				<Card on:summon={SwitchToSpeedTagger} name="Speed Tagger"/>
 			</div>
 		{/if}
 	{/if}

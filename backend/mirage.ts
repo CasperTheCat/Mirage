@@ -84,6 +84,9 @@ async function entry()
     )
 
     let imageCount = 0;
+    let lastSweep: number = 0;
+    let nextSweep: number = 0;
+    let recheckDuration: number = 3 * 24 * 60 * 60 * 1000;
 
     // Get Folder
     // This isn't valid unless DB is up
@@ -97,6 +100,8 @@ async function entry()
 
         // Update this
         imageCount = await mirageDB.GetImageCount();
+        const thisMoment = new Date();
+        nextSweep = thisMoment.getTime() + recheckDuration;
     }
 
     async function MarkImages()
@@ -104,7 +109,9 @@ async function entry()
         let DiscardMarkTimeStart = process.hrtime();
         await DiscardOrMark(__imagePath, mirageDB);
         let DiscardMarkTimeStop = process.hrtime(DiscardMarkTimeStart);
+        let thisSweep: Date = new Date();
         console.log(`[INFO] Image sweep completed in ${DiscardMarkTimeStop[0] + DiscardMarkTimeStop[1] * 1e-9 } seconds`);  
+        console.log(`[INFO] Next update in ${(Math.abs(nextSweep - thisSweep.getTime()))/(1000 * 60)} minutes`);  
 
         // Update this
         imageCount = await mirageDB.GetImageCount();
@@ -119,7 +126,7 @@ async function entry()
     setInterval(MarkImages, 2 * 60 * 60 * 1000);
 
     // Queue Image Check every 3 days
-    setInterval(CheckImages, 3 * 24 * 60 * 60 * 1000);
+    setInterval(CheckImages, recheckDuration);
 
     imageCount = await mirageDB.GetImageCount();
 
@@ -742,67 +749,229 @@ async function entry()
     );
 
     app.get("/api/image/meta/:id/suggested", ensureLoggedIn(), 
-    async (req, res) => 
-    {
-        try
+        async (req, res) => 
         {
-            let y = Buffer.from(req.params.id, 'hex');
-            let x = await mirageDB.GetImageByHash(y);
+            try
+            {
+                let y = Buffer.from(req.params.id, 'hex');
+                let x = await mirageDB.GetImageByHash(y);
 
-            //console.log(x);
+                //console.log(x);
 
-            let z = {
-                "suggested":  GetPrelimTags(x["path"])
-            };
+                let z = {
+                    "suggested":  GetPrelimTags(x["path"])
+                };
 
-            res.send(z);
+                res.send(z);
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(404).send();
+            }
         }
-        catch (Exception)
-        {
-            console.log(Exception);
-            res.status(404).send();
-        }
-    }
-);
+    );
 
     app.get("/api/search/bytag", ensureLoggedIn(), 
-    async (req, res) => 
-    {
-        res.status(200).send(
-            {
-                "images": []
-            }
-        );
-
-        return;
-        try
+        async (req, res) => 
         {
-            let a = await mirageDB.GetUntaggedImages();
-            let out = Array(a.length);
-
-            for (let i = 0; i < a.length; ++i)
-            {
-                out[i] = {
-                    "width": a[i]["width"],
-                    "height": a[i]["height"],
-                    "url": `/api/image/data/${a[i]["normalhash"].toString('hex')}`
-                };
-            }
-    
             res.status(200).send(
                 {
-                    "images": out
+                    "images": []
                 }
             );
 
+            return;
+            try
+            {
+                let a = await mirageDB.GetUntaggedImages();
+                let out = Array(a.length);
+
+                for (let i = 0; i < a.length; ++i)
+                {
+                    out[i] = {
+                        "width": a[i]["width"],
+                        "height": a[i]["height"],
+                        "url": `/api/image/data/${a[i]["normalhash"].toString('hex')}`
+                    };
+                }
+        
+                res.status(200).send(
+                    {
+                        "images": out
+                    }
+                );
+
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+            }
+            //res.sendFile(path.resolve(__dirname, '../', 'public', 'index.html'));
         }
-        catch (Exception)
+    );
+
+    app.post("/api/tools/speedtag/commit", bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
+        async (req, res) => 
         {
-            console.log(Exception);
+            try
+            {
+                //loadedImages
+
+                let bodyjson: JSON[] = req.body;
+                for (let entry of bodyjson)
+                {
+                    if ("loadedImages" in entry)
+                    {
+                        // Good stuff
+                        const hashes: string[] = entry["loadedImages"];
+
+                        for (let i = 0; i < hashes.length; ++i )
+                        {
+                            console.log(hashes[i]);
+                            // Get hash
+                            const lHash = Buffer.from(hashes[i], 'hex');
+                            const image = await mirageDB.GetImageByHash(lHash);
+                            let prelimTags = GetPrelimTags(image["path"]);
+
+
+                            prelimTags = prelimTags.filter(e => e);
+
+                            for (let i = 0; i < prelimTags.length; ++i)
+                            {                   
+                                prelimTags[i] = `'${SanitiseTag(prelimTags[i])}'`;
+                            }
+                            const newTags = prelimTags.join(" ");
+
+                            await mirageDB.UpdateImageTagsByHash(lHash, newTags);
+                            
+                            //const hexhash: Buffer = Buffer.from(hashes[i], 'hex');
+                            //await mirageDB.AddImageToBoard(boardid, hexhash);
+                        }
+
+                        //tagToFind = entry["baseTag"];
+                        break;
+                    }
+                    else
+                    {
+                        res.status(404).send();
+                    }
+                }
+
+                // let a = await mirageDB.GetUntaggedImages();
+                // let currentIndex: number = 0;
+                // let runningCount = Math.max(a.length, 256);
+                // let out = Array(runningCount);
+                // let tagToFind: string = "";
+
+                // let bodyjson: JSON[] = req.body;
+                // for (let entry of bodyjson)
+                // {
+                //     if ("baseTag" in entry)
+                //     {
+                //         // Good stuff
+                //         tagToFind = entry["baseTag"];
+                //         break;
+                //     }
+                //     else
+                //     {
+                //         res.status(404).send();
+                //     }
+                // }
+
+
+                // for (let i = 0; i < a.length; ++i)
+                // {
+                //     // Query the tags that we *would* have
+                //     let prelimTags = GetPrelimTags(a[i]["path"]);
+
+                //     if (prelimTags.indexOf(tagToFind) > -1)
+                //     {
+                //         out[currentIndex] = {
+                //             "width": a[i]["width"],
+                //             "height": a[i]["height"],
+                //             "hash": `${a[i]["normalhash"].toString('hex')}`
+                //         };
+
+                //         ++currentIndex;
+                //     }
+                // }
+
+                res.status(200).send();
+
+                // res.status(200).send(
+                //     {
+                //         "images": out
+                //     }
+                // );
+            }
+            catch (Exception)
+            {
+                //console.log(Exception);
+                console.log("[WARN] Tag Search Failed");
+                res.status(404).send();
+            }
+            //res.sendFile(path.resolve(__dirname, '../', 'public', 'index.html'));
         }
-        //res.sendFile(path.resolve(__dirname, '../', 'public', 'index.html'));
-    }
-);
+    );
+
+    app.get("/api/tools/speedtag/show/:tag", ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let a = await mirageDB.GetUntaggedImagesSpeedTag();
+                let currentIndex: number = 0;
+                let runningCount = Math.max(a.length, 256);
+                let out = [];
+                let tagToFind = req.params.tag;
+                tagToFind = tagToFind.toLowerCase();
+
+                // Construct Regex
+                const Regex: RegExp = new RegExp(tagToFind)
+
+                for (let i = 0; i < a.length; ++i)
+                {
+                    // Query the tags that we *would* have
+                    let prelimTags = GetPrelimTags(a[i]["path"]);
+
+                    // Combine prelimTags into one string
+                    // This lets us search between tags
+                    prelimTags = prelimTags.filter(e => e);
+                    const newTags = prelimTags.join(" ");  
+
+                    if (Regex.test(newTags))
+                    {
+                        out.push({
+                            "width": a[i]["width"],
+                            "height": a[i]["height"],
+                            "hash": `${a[i]["normalhash"].toString('hex')}`
+                        });
+
+                        ++currentIndex;
+                    }
+
+                    // if (prelimTags.indexOf(tagToFind) > -1)
+                    // {
+
+                    // }
+                }
+        
+                res.status(200).send(
+                    {
+                        "images": out
+                    }
+                );
+            }
+            catch (Exception)
+            {
+                //console.log(Exception);
+                console.log("[WARN] Tag Search Failed");
+                res.status(404).send();
+            }
+            //res.sendFile(path.resolve(__dirname, '../', 'public', 'index.html'));
+        }
+    );
 
     app.get("/api/search/bytag/:tags", ensureLoggedIn(), 
         async (req, res) => 
@@ -854,6 +1023,43 @@ async function entry()
         }
     );
 
+    app.get("/api/search/all", ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let a: any;
+                a = await mirageDB.GetAllImages();
+
+                let out = Array(a.length);
+
+                for (let i = 0; i < a.length; ++i)
+                {
+                    out[i] = {
+                        "width": a[i]["width"],
+                        "height": a[i]["height"],
+                        "hash": `${a[i]["normalhash"].toString('hex')}`,
+                        "path": a[i]["path"],
+                        "perc": a[i]["perceptualHash"]
+                    };
+                }
+        
+                res.status(200).send(
+                    {
+                        "images": out
+                    }
+                );
+
+            }
+            catch (Exception)
+            {
+                //console.log(Exception);
+                console.log("[WARN] Tag Search Failed");
+                res.status(404).send();
+            }
+        }
+    );
+
     app.post('/api/board/remove', bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
         async (req, res) => 
         {
@@ -896,29 +1102,29 @@ async function entry()
     
 
     app.post('/api/board/create', bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
-    async (req, res) => 
-    {
-        try
+        async (req, res) => 
         {
-            let bodyjson: string[] = req.body;
-            for (let entry of bodyjson)
+            try
             {
-                const userid: any = req.user;
-                await mirageDB.AddBoard(userid, entry);
+                let bodyjson: string[] = req.body;
+                for (let entry of bodyjson)
+                {
+                    const userid: any = req.user;
+                    await mirageDB.AddBoard(userid, entry);
+                }
+                
+                // Convert from hash to UI
+
+                res.status(200).send();
+
             }
-            
-            // Convert from hash to UI
-
-            res.status(200).send();
-
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(500).send("{ \"code\": 0, \"reason\": \"Exception\" }");
+            }
         }
-        catch (Exception)
-        {
-            console.log(Exception);
-            res.status(500).send("{ \"code\": 0, \"reason\": \"Exception\" }");
-        }
-    }
-);
+    );
 
     app.post('/api/board/add', bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
         async (req, res) => 

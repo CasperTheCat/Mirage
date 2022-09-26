@@ -307,6 +307,13 @@ class MirageDB
         }
     );
 
+    PSGetUntaggedImagesSpeedTag = new PreparedStatement(
+        {
+            name: "PSGetUntaggedImages",
+            text: "SELECT height, width, normalhash, path FROM images WHERE live = true AND tags = ''"
+        }
+    );
+
     PSGetUntaggedImagesSortedLimited = new PreparedStatement(
         {
             name: "PSGetUntaggedImagesSortedLimited",
@@ -602,10 +609,17 @@ class MirageDB
         return this.pgdb.manyOrNone(this.PSGetUntaggedImages, []);
     }
 
+    async GetUntaggedImagesSpeedTag()
+    {
+        return this.pgdb.manyOrNone(this.PSGetUntaggedImagesSpeedTag, []);
+    }
+
     async GetUntaggedImagesSortedLimited()
     {
         return this.pgdb.manyOrNone(this.PSGetUntaggedImagesSortedLimited, []);
     }
+
+    
 
     async GetTagList()
     {
