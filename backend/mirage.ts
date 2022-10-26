@@ -748,6 +748,34 @@ async function entry()
         }
     );
 
+    app.get("/api/image/meta/:id/full", ensureLoggedIn(),
+        async (req, res) =>
+        {
+            try
+            {
+                let y = Buffer.from(req.params.id, 'hex');
+                let x = await mirageDB.GetImageByHash(y);
+
+                //console.log(x);
+
+                let z = {
+                    "width": x["width"],
+                    "height": x["height"],
+                    "hash": `${x["normalhash"].toString('hex')}`,
+                    "path": x["path"],
+                    "perc": x["perceptualHash"]
+                };
+
+                res.send(z);
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(404).send();
+            }
+        }
+    );
+
     app.get("/api/image/meta/:id/suggested", ensureLoggedIn(), 
         async (req, res) => 
         {

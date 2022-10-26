@@ -1,0 +1,370 @@
+#import psycopg
+import requests
+import json
+from HashUtil import HashList
+import base64
+
+# Can we speak to Mirage's DB, or do we need to go via the API
+
+fDepth = 8
+nPerFolder = 2
+nRecursiveArrayDepth = 8
+nBucketSize = 32 # 256 / x buckets
+
+def PadMe(x):
+    a = str(x)
+    b = len(a)
+    c = max(0, 5 - b)
+
+    return "0" * c + a
+
+
+def GetImagesFromMirage(rootURL, s, wantedTags, bannedTags):
+    username = ""
+    password = ""
+
+    with open("local.auth", "r") as fHandle:
+        username = fHandle.readline()
+        password = fHandle.readline()
+
+    data = {
+        "username": username,
+        "password": password
+    }
+
+    r = s.post("{}/login".format(rootURL), data=data)
+
+    #getMetaById = "/api/image/meta/{}"
+
+    UltimateImages = []
+    # Get All Boards for the user
+    UserBoards = []
+    BoardList = s.get("{}/api/board".format(rootURL))
+
+    if BoardList.status_code == 200:
+        BoardListAsJson = BoardList.json()
+        if "boards" in BoardListAsJson:
+            UserBoards = BoardListAsJson["boards"]
+    
+    
+    for Board in UserBoards:
+        print("[DEBUG][BOARDS] Querying Board: {}".format(Board["boardname"]))
+
+        IndividualBoard = s.get("{}/api/board/{}/images/".format(rootURL, Board["boardid"]))
+        
+        if IndividualBoard.status_code == 200:
+            IBJson = IndividualBoard.json()
+            if "images" in IBJson:
+                for Image in IBJson["images"]:
+                    if "hash" in Image:
+                        UltimateImages.append(Image["hash"])
+
+
+
+    for Tag in WantedTags:
+        print("[DEBUG][TAGS] Querying Tag: {}".format(Tag))
+
+        ImageList = s.get("{}/api/search/bytag/'{}'".format(rootURL, Tag))
+        if ImageList.status_code == 200:
+            ILJson = ImageList.json()
+            if "images" in ILJson:
+                print("[DEBUG][TAGS][ADDITIONS] {} added {} images".format(Tag, len(ILJson["images"])))
+                for Image in ILJson["images"]:
+                    if "hash" in Image:
+                        UltimateImages.append(Image["hash"])
+        else:
+            print("[DEBUG][TAGS] Query Failed for {}".format(Tag))
+
+
+    UltimateImages = list(set(UltimateImages))
+    print("[DEBUG][IMAGES] Got {} Images".format(len(UltimateImages)))
+
+    # This check causes traffic, so don't do it if we don't need to
+    if len(BannedTags) > 0:
+        BannedTag2D = []
+        for ImageHash in UltimateImages:
+            TagList = s.get("{}/api/image/meta/{}/tag".format(rootURL, ImageHash))
+            
+            if TagList.status_code == 200:
+                TLJson = TagList.json()
+                if "tags" in TLJson:
+                    BannedTag2D.append((ImageHash, TLJson["tags"]))
+
+        binnedTags = []
+        for idx, Image in enumerate(BannedTag2D):
+            #print("[DEBUG][BANNED] Binning: {}".format(Image[0]))
+            for Tag in BannedTags:
+                if Tag in Image[1]:
+                    print("[DEBUG][BANNED] Binned {}".format(Image[0]))
+                    binnedTags.append(idx)
+                    
+        for i in sorted(binnedTags, reverse=True):
+            del UltimateImages[i]
+                
+        print("[DEBUG][IMAGES] Got {} Images".format(len(UltimateImages)))
+
+    ReturnArray = []
+    for Image in UltimateImages:
+        ImageData = s.get("{}/api/image/meta/{}/full".format(rootURL, Image))
+        
+
+
+        if ImageData.status_code == 200:
+            IDJson = ImageData.json()
+            ReturnArray.append(IDJson)
+
+    #print(UltimateImages)
+
+    return ReturnArray
+
+    exit()
+
+
+    #searchAll = "/api/search/bytag/*"
+    searchAll = "/api/search/all"
+    #searchAll = "/api/search/bytag/eddienx89"
+
+    print("{}{}".format(rootURL, searchAll))
+
+    x = s.get("{}{}".format(rootURL, searchAll))
+
+    if (x.status_code != 200):
+        return []
+
+    imageList = x.json()["images"]
+
+    return imageList
+
+
+def GetTele(hex):
+    tPath = []
+
+    for i in range(fDepth):
+        tPath.append(hex[i * nPerFolder:(i+1) * nPerFolder])
+
+    tPath.append(hex[fDepth * nPerFolder:])
+
+    return tPath
+
+def Telescope(modPath, hexhash, datum):
+
+
+    tPath = modPath
+
+    for i in range(fDepth):
+        split = hexhash[i * nPerFolder:(i+1) * nPerFolder]
+        tPath[split] = {}
+        tPath = tPath[split]
+
+    h = hexhash[fDepth * nPerFolder:]
+
+    if h not in tPath or len(tPath[h]) == 0:
+        tPath[h] = [datum]
+    else:
+        tPath[h].append(datum)
+
+    return modPath
+
+
+def ConvertToDict(list):
+    hashDict = {}
+
+    for i in list:
+        hashDict = Telescope(hashDict, i["hash"], i)
+
+    return hashDict
+
+def Create256ArrayRecursive(descentLevelsRemaining):
+    if 1 > descentLevelsRemaining:
+        # Create empty and return
+        return []
+    else:
+        # Create 256 more of us
+        retArray = []
+        for i in range(256 // nBucketSize):
+            retArray.append(Create256ArrayRecursive(descentLevelsRemaining - 1))
+        return retArray
+
+def ConvertToBigArray(list):
+    # Create Arrays
+
+    bigArray = Create256ArrayRecursive(nRecursiveArrayDepth)
+
+    for i in list:
+        sampler = bigArray
+        asHex = i["hash"]
+
+        for split in range(nRecursiveArrayDepth):
+            index = int(asHex[2 * split: (split+1) * 2], base=16) // nBucketSize
+            sampler = sampler[index]
+
+        sampler.append(i)
+
+    return bigArray
+
+
+def FindHash(hex, list):
+    res = GetTele(hex.hex())
+
+    currentLoc = imageList
+
+    for i in range(fDepth + 1):
+        if res[i] in currentLoc:
+            currentLoc = currentLoc[res[i]]
+        else:
+            print("[DEBUG] No bucket {} ({})".format(res[i], "/".join(res[:i+1])))
+            return False
+
+    print(currentLoc)
+
+    return True
+
+def FindHash256(hex, list):
+
+    sampler = list
+    asHex = hex
+
+    for split in range(nRecursiveArrayDepth):
+        index = int(asHex[2 * split: (split+1) * 2], base=16) // nBucketSize
+        sampler = sampler[index]
+
+    print("[INFO] Searching for {} in:".format(asHex))
+    for i in sampler:
+        print("[INFO] \t{}".format(i['hash']))
+
+    for i in sampler:
+        if asHex == i['hash']:
+            return True, i
+
+    return False, None
+
+def CreateFromHashList(hash, name, perchash):
+    asHash = hash.hex() if hash is not None else ""
+    asPerc = (base64.b64decode(perchash[0]).hex(), perchash[1], perchash[2])  if perchash is not None else ("", 0, 0)
+
+    return {
+        "hash": asHash,
+        "name": name,
+        "perc": asPerc
+        }
+
+
+OPCODE_CREATEFILE = 0
+
+
+if __name__ == "__main__":
+    import os
+    import sys
+
+    HashListPath = sys.argv[2]
+    TagListPath = sys.argv[3]
+    OutPath = sys.argv[4]
+
+    WantedTags = []
+    BannedTags = []
+
+    with open(TagListPath, "r") as f:
+        lines = f.read().split("\n")
+        for line in lines:
+            if line.startswith("#"):
+                # Skip
+                continue
+            elif line.startswith("+"):
+                # Add a tag
+                WantedTags.append(line[1:])
+            elif line.startswith("-"):
+                # Add a tag
+                BannedTags.append(line[1:])
+            else:
+                continue
+
+    rootURL = "http://{}".format(sys.argv[1])
+    s = requests.Session()
+
+    imageList = GetImagesFromMirage(rootURL, s, WantedTags, BannedTags)
+
+    if (len(imageList) == 0):
+        print("List is empty! Exiting")
+        exit(-1)
+
+    print("Got {} image references".format(len(imageList)))
+
+    # Get Files from PyDeDup?
+    a = HashList.CHashList(HashListPath.encode())
+
+    # Compute against
+    hashList = []
+    for (l_FileSize, l_shortHash, l_longHash, (saneRelPath, extension), l_PercHash) in a.hashList:
+        hashList.append(CreateFromHashList(l_longHash, saneRelPath, l_PercHash))
+
+    otherBig = ConvertToBigArray(hashList)
+
+    CmdList = []
+
+    for i in imageList:
+        b, v = FindHash256(i["hash"], otherBig)
+        if not b:
+            if "path" in i:
+                print("[INFO][MIRAGE][MSSNG] Did not find {} in HashList".format(i["path"].encode()))
+                # Enqueue
+                CmdList.append((
+                    OPCODE_CREATEFILE,
+                    i["path"],
+                    i["hash"]
+                ))
+            else:
+                print("[INFO][MIRAGE][MSSNG] Did not find {} in HashList".format("REDACTED"))
+        else:
+            print("[INFO][MIRAGE][FOUND] Found {} in HashList".format(v["name"]))
+            if "path" in i:
+                print("[INFO][MIRAGE][FOUND][LOCALE] {} @ {}".format(v["name"], i["path"].encode()))
+
+
+
+    asBigArray = ConvertToBigArray(imageList)
+    #imageList = ConvertToDict(imageList)
+
+    for (l_FileSize, l_shortHash, l_longHash, (saneRelPath, extension), l_PercHash) in a.hashList:
+        # if FindHash(l_longHash, imageList):
+        #     print("Git")
+        #     #exit()
+        b,v = FindHash256(l_longHash.hex(), asBigArray)
+        if not b:
+            print("[INFO][LIST][MSSNG] Did not find {} in Mirage".format(saneRelPath))
+        else:
+            print("[INFO][LIST][FOUND] Found {} in Mirage".format(saneRelPath))
+            print("[INFO][LIST][FOUND][LOCALE] {} @ {}".format(saneRelPath, v["path"].encode()))
+
+
+    if not os.path.exists(OutPath):
+        os.makedirs(OutPath)
+
+    for i, cmd in enumerate(CmdList):
+        print("Fetching {}/{} ({:.2f})".format(
+            PadMe(i),
+            PadMe(len(CmdList)),
+            (i / len(CmdList)) * 100
+            ))
+
+        if cmd[0] == OPCODE_CREATEFILE:
+            Image = s.get("{}/api/image/data/{}".format(rootURL, cmd[2]))
+
+            path = os.path.join(OutPath, cmd[1])
+
+            if not os.path.exists(os.path.dirname(path)):
+                os.makedirs(os.path.dirname(path))
+
+            if Image.status_code == 200 and not os.path.exists(path):
+                with open(path, 'wb+') as fd:
+                    for chunk in Image.iter_content(chunk_size=128*1024):
+                        fd.write(chunk)
+        
+
+    # We have a choice
+    # We can back up everything to a tape archive
+    # The downside is that we have no way to check if the files are *actually* backed up
+    # Or we can create a folder and let PyDedup find the files in future
+
+    
+
+
