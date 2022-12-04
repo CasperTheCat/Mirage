@@ -783,7 +783,12 @@ async function entry()
             {
                 let bodyjson: JSON[] = req.body;
                 let results = [];
-                if ("partial" in bodyjson)
+                if (
+                    "partial" in bodyjson &&
+                    Array.isArray(bodyjson["partial"]) &&
+                    bodyjson["partial"].length > 0 &&
+                    typeof bodyjson["partial"][0] === 'string'
+                )
                 {
                     // Good stuff
                     const hashes: string[] = bodyjson["partial"];
@@ -805,7 +810,12 @@ async function entry()
                     }
                 }
 
-                if ("complete" in bodyjson)
+                if (
+                    "complete" in bodyjson &&
+                    Array.isArray(bodyjson["complete"]) &&
+                    bodyjson["complete"].length > 0 &&
+                    typeof bodyjson["complete"][0] === 'string'
+                )
                 {
                     // Good stuff
                     const hashes: string[] = bodyjson["complete"];
@@ -921,7 +931,12 @@ async function entry()
                 let bodyjson: JSON[] = req.body;
                 for (let entry of bodyjson)
                 {
-                    if ("loadedImages" in entry)
+                    if (
+                        "loadedImages" in entry &&
+                        Array.isArray(entry["loadedImages"]) &&
+                        entry["loadedImages"].length > 0 &&
+                        typeof entry["loadedImages"][0] === 'string'
+                    )
                     {
                         // Good stuff
                         const hashes: string[] = entry["loadedImages"];
@@ -1168,7 +1183,13 @@ async function entry()
                 let bodyjson: JSON[] = req.body;
                 for (let entry of bodyjson)
                 {
-                    if ("board" in entry && "hashes" in entry)
+                    if (
+                        "board" in entry && typeof entry["board"] === 'number' &&
+                        "hashes" in entry &&
+                        Array.isArray(entry["hashes"]) &&
+                        entry["hashes"].length > 0 &&
+                        typeof entry["hashes"][0] === 'string'
+                        )
                     {
                         // Good stuff
                         const hashes: string[] = entry["hashes"];
@@ -1234,7 +1255,13 @@ async function entry()
                 let bodyjson: JSON[] = req.body;
                 for (let entry of bodyjson)
                 {
-                    if ("board" in entry && "hashes" in entry)
+                    if (
+                        "board" in entry && typeof entry["board"] === 'number' &&
+                        "hashes" in entry &&
+                        Array.isArray(entry["hashes"]) &&
+                        entry["hashes"].length > 0 &&
+                        typeof entry["hashes"][0] === 'string'
+                        )
                     {
                         // Good stuff
                         const hashes: string[] = entry["hashes"];
