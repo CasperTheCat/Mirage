@@ -776,6 +776,78 @@ async function entry()
         }
     );
 
+    app.get("/api/image/batch/meta", bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let bodyjson: JSON[] = req.body;
+                let results = [];
+                if ("partial" in bodyjson)
+                {
+                    // Good stuff
+                    const hashes: string[] = bodyjson["partial"];
+
+                    for (let i = 0; i < hashes.length; ++i )
+                    {
+                        let y = Buffer.from(hashes[i], 'hex');
+                        let x = await mirageDB.GetImageByHash(y);
+
+                        let z = {
+                            "width": x["width"],
+                            "height": x["height"],
+                            "hash": `${x["normalhash"].toString('hex')}`,
+                            "path": x["path"],
+                            "perc": x["perceptualHash"]
+                        };
+        
+                        results.push(z);
+                    }
+                }
+
+                if ("complete" in bodyjson)
+                {
+                    // Good stuff
+                    const hashes: string[] = bodyjson["complete"];
+
+                    for (let i = 0; i < hashes.length; ++i )
+                    {
+                        let y = Buffer.from(hashes[i], 'hex');
+                        let x = await mirageDB.GetImageByHash(y);
+
+                        let z = {
+                            "width": x["width"],
+                            "height": x["height"],
+                            "hash": `${x["normalhash"].toString('hex')}`,
+                            "path": x["path"],
+                            "perc": x["perceptualHash"],
+                            "tags": x["tags"]
+                        };
+        
+                        results.push(z);
+                    }
+                }
+
+                if (results.length < 1)
+                {
+                    console.log(bodyjson);
+                    res.status(404).send();
+                }
+                else
+                {
+                    res.status(200).send(results);
+                }
+
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(404).send();
+            }
+
+        }
+    );
+
     app.get("/api/image/meta/:id/suggested", ensureLoggedIn(), 
         async (req, res) => 
         {

@@ -1,6 +1,6 @@
 {
   "name": "Mirage",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "private": true,
   "main": "build/mirage.js",
   "type": "module",
@@ -21,9 +21,10 @@
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^22.0.0",
-    "@rollup/plugin-node-resolve": "^13.0.0",
-    "@rollup/plugin-typescript": "^8.0.0",
+    "@rollup/plugin-commonjs": "^23.0.0",
+    "@rollup/plugin-node-resolve": "^15.0.0",
+    "@rollup/plugin-terser": "^0.1.0",
+    "@rollup/plugin-typescript": "^9.0.0",
     "@tsconfig/svelte": "^3.0.0",
     "@types/body-parser": "^1.19.2",
     "@types/connect-ensure-login": "^0.1.7",
@@ -33,14 +34,13 @@
     "@types/fluent-ffmpeg": "^2.1.20",
     "@types/node": "^18.0.0",
     "@types/passport": "^1.0.7",
-    "@types/sharp": "^0.30.0",
+    "@types/sharp": "^0.31.0",
     "gts": "^4.0.0",
     "nodemon": "^2.0.15",
-    "rollup": "^2.3.4",
-    "rollup-plugin-css-only": "^3.1.0",
+    "rollup": "^3.3.0",
+    "rollup-plugin-css-only": "^4.0.0",
     "rollup-plugin-livereload": "^2.0.0",
     "rollup-plugin-svelte": "^7.0.0",
-    "rollup-plugin-terser": "^7.0.0",
     "svelte": "^3.46.6",
     "svelte-check": "^2.0.0",
     "svelte-preprocess": "^4.0.0",
@@ -57,6 +57,6 @@
     "passport": "^0.6.0",
     "passport-local": "^1.0.0",
     "pg-promise": "^10.11.1",
-    "sharp": "^0.30.0"
+    "sharp": "^0.31.0"
   }
 }
