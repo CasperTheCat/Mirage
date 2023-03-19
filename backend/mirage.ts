@@ -247,6 +247,38 @@ async function entry()
         }
     );
 
+    app.get("/api/search/file/restricted", ensureLoggedIn(),
+        async (req, res) =>
+        {
+            try
+            {
+                //let a = await mirageDB.GetAllImages();
+                let a = await mirageDB.GetUntaggedFilesSortedLimited();
+                let out = Array(a.length);
+
+                for (let i = 0; i < a.length; ++i)
+                {
+                    out[i] = {
+                        "name": a[i]["name"],
+                        "size": a[i]["size"],
+                        "hash": `${a[i]["hash"].toString('hex')}`
+                    };
+                }
+
+                res.status(200).send(
+                    {
+                        "files": out
+                    }
+                );
+
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+            }
+        }
+    );
+
     app.get("/api/search/image", ensureLoggedIn(), 
         async (req, res) => 
         {
@@ -1097,7 +1129,7 @@ async function entry()
                 if (req.params.tags === "*")
                 {
                     // Don't allow on a large instance. We'll crash the browser immediately
-                    if (imageCount > 10000)
+                    if (imageCount > 9999)
                     {
                         res.status(403).send("{\"error\": 3, \"reason\": \"This instance has enough images that loading them all is a risk to client device stability!\" }");
                         return;
@@ -1324,6 +1356,275 @@ async function entry()
             res.status(404).send();
         }
     });
+
+
+    app.get("/api/file/data/:id", ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let y = Buffer.from(req.params.id, 'hex');
+                let x = await mirageDB.GetFilePathByHash(y);
+                
+                if (x)
+                {
+                    let loadPath = x["path"];
+
+                    res.sendFile(path.resolve(__imagePath, loadPath));
+                }
+                else
+                {
+                    // Mark deleted
+                    res.status(404).send();
+
+                    // Mark
+                    console.log(`[WARN] Marking ${y} as dead.`)
+                    mirageDB.MarkFileDeletedHash(y);
+                }
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(500).send();
+            }
+        }
+    );
+
+    app.get('/api/file/meta/:id/tag', ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let y = Buffer.from(req.params.id, 'hex');
+                let x = await mirageDB.GetFileTagsByHash(y);
+                
+                if (x)
+                {
+                    //let imgtags = x["tags"];
+                    let inTab = await SplitTSV(x["tags"].toLowerCase());//.split(" ");
+
+                    let result = { "tags": inTab };
+
+                    res.status(200).send(result);
+                }
+                else
+                {
+                    res.status(404).send("{ \"code\": 2, \"reason\": \"Hash not found\" }");
+                }
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(500).send("{ \"code\": 0, \"reason\": \"Exception\" }");
+            }
+        }
+    );
+
+    app.get("/api/file/search/bytag/:tags", ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let a: any;
+                if (req.params.tags === "*")
+                {
+                    // Don't allow on a large instance. We'll crash the browser immediately
+                    if (imageCount > 9999)
+                    {
+                        res.status(400).send("{\"error\": 3, \"reason\": \"This instance has enough images that loading them all is a risk to client device stability!\" }");
+                        return;
+                    }
+
+                    a = await mirageDB.GetAllFilesShort();
+                }
+                else
+                {
+                    a = await mirageDB.GetFileByTagShort(req.params.tags);
+                }
+
+                let out = Array(a.length);
+
+                for (let i = 0; i < a.length; ++i)
+                {
+                    out[i] = {
+                        "name": a[i]["name"],
+                        "size": a[i]["size"],
+                        "hash": `${a[i]["hash"].toString('hex')}`
+                    };
+                }
+
+                res.status(200).send(
+                    {
+                        "files": out
+                    }
+                );
+
+            }
+            catch (Exception)
+            {
+                //console.log(Exception);
+                console.log("[WARN] Tag Search Failed");
+                res.status(404).send();
+            }
+            //res.sendFile(path.resolve(__dirname, '../', 'public', 'index.html'));
+        }
+    );
+
+    app.get("/api/file/search/fuzzy/:tags", ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let a: any;
+                if (req.params.tags === "*")
+                {
+                    // Don't allow on a large instance. We'll crash the browser immediately
+                    if (imageCount > 9999)
+                    {
+                        res.status(400).send("{\"error\": 3, \"reason\": \"This instance has enough images that loading them all is a risk to client device stability!\" }");
+                        return;
+                    }
+
+                    a = await mirageDB.GetAllFilesShort();
+                }
+                else
+                {
+                    a = await mirageDB.GetFileByTagShort(req.params.tags);
+                }
+
+
+                let out = [];
+
+                if (a.length > 0)
+                {
+                    out = Array(a.length);
+                    for (let i = 0; i < a.length; ++i)
+                    {
+                        out[i] = {
+                            "name": a[i]["name"],
+                            "size": a[i]["size"],
+                            "hash": `${a[i]["hash"].toString('hex')}`
+                        };
+                    }
+                }
+                else
+                {
+                    // Try to fuzzy search
+                    let fuzzyFiles = await mirageDB.GetAllFiles();
+                    let currentIndex: number = 0;
+                    let runningCount = Math.max(a.length, 256);
+                    let tagToFind = req.params.tags;
+                    tagToFind = tagToFind.toLowerCase();
+
+                    // Construct Regex
+                    const Regex: RegExp = new RegExp(tagToFind)
+
+                    for (let i = 0; i < fuzzyFiles.length; ++i)
+                    {
+                        // Query the tags that we *would* have
+                        let prelimTags = GetPrelimTags(fuzzyFiles[i]["path"]);
+
+                        // Combine prelimTags into one string
+                        // This lets us search between tags
+                        prelimTags = prelimTags.filter(e => e);
+                        const newTags = prelimTags.join(" ");  
+
+                        if (Regex.test(newTags))
+                        {
+                            out.push({
+                                "name": fuzzyFiles[i]["name"],
+                                "size": fuzzyFiles[i]["size"],
+                                "hash": `${fuzzyFiles[i]["hash"].toString('hex')}`
+                            });
+
+                            ++currentIndex;
+                        }
+                    }
+                }
+
+                res.status(200).send(
+                    {
+                        "files": out
+                    }
+                );
+
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                console.log("[WARN] Tag Search Failed");
+                res.status(404).send();
+            }
+            //res.sendFile(path.resolve(__dirname, '../', 'public', 'index.html'));
+        }
+    );
+
+
+    app.post('/api/file/meta/:id/tag', bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(),
+        async (req, res) => 
+        {
+            try
+            {
+                let y = Buffer.from(req.params.id, 'hex');
+                let resarray: string[] = req.body;
+
+                resarray = resarray.filter(e => e);
+
+                for (let i = 0; i < resarray.length; ++i)
+                {                   
+                    resarray[i] = `'${SanitiseTag(resarray[i])}'`;
+                }
+                let newTags = resarray.join(" ");
+                //let x = await mirageDB.GetImageTagsByHash(y);
+                await mirageDB.UpdateFileTagsByHash(y, newTags);
+                res.status(200).send(newTags);
+                
+                // if (x)
+                // {
+                //     let inTab = req.params.tag.toLowerCase();
+
+                //     await mirageDB.UpdateImageTagsByHash(y, inTab);
+                //     res.status(200).send(inTab);
+                // }
+                // else
+                // {
+                //     res.status(404).send("{ \"code\": 2, \"reason\": \"Hash not found\" }");
+                // }
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(500).send("{ \"code\": 0, \"reason\": \"Exception\" }");
+            }
+        }
+    );
+
+    app.get("/api/file/meta/:id/suggested", ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let y = Buffer.from(req.params.id, 'hex');
+                let x = await mirageDB.GetFileByHash(y);
+
+                let z = {
+                    "suggested":  GetPrelimTags(x["path"], false)
+                };
+
+                res.send(z);
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(404).send();
+            }
+        }
+    );
+
+
+
+
+
 
 
 

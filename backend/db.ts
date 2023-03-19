@@ -87,6 +87,13 @@ class MirageDB
         }
     );
 
+    PSGetFileByHash = new PreparedStatement(
+        {
+            name: "PSGetFileByHash",
+            text: "SELECT * FROM files WHERE hash = $1"
+        }
+    );
+
     PSGetImageByHashShort = new PreparedStatement(
         {
             name: "PSGetImageByHashShort",
@@ -101,10 +108,24 @@ class MirageDB
         }
     );
 
+    PSGetFilePathByHash = new PreparedStatement(
+        {
+            name: "PSGetFilePathByHash",
+            text: "SELECT path FROM files WHERE hash = $1"
+        }
+    );
+
     PSGetImageTagsByHash = new PreparedStatement(
         {
             name: "PSGetImageTagsByHash",
             text: "SELECT tags FROM images WHERE normalhash = $1"
+        }
+    );
+
+    PSGetFileTagsByHash = new PreparedStatement(
+        {
+            name: "PSGetFileTagsByHash",
+            text: "SELECT tags FROM files WHERE hash = $1"
         }
     );
 
@@ -119,6 +140,13 @@ class MirageDB
         {
             name: "PSGetImageByTagShort",
             text: "SELECT height, width, normalhash FROM images WHERE live = true AND tags @@ $1::tsquery ORDER BY normalhash ASC"
+        }
+    );
+
+    PSGetFileByTagShort = new PreparedStatement(
+        {
+            name: "PSGetFileByTagShort",
+            text: "SELECT name, size, hash FROM files WHERE live = true AND tags @@ $1::tsquery ORDER BY name ASC"
         }
     );
 
@@ -214,10 +242,24 @@ class MirageDB
         }
     );
 
+    PSUpdateFileTagsByHash = new PreparedStatement(
+        {
+            name: "PSUpdateFileTagsByHash",
+            text: "UPDATE files SET tags = $2::tsvector WHERE hash = $1"
+        }
+    );
+
     PSGetAllImages = new PreparedStatement(
         {
             name: "PSGetAllImages",
             text: "SELECT * FROM images WHERE live = true"
+        }
+    );
+
+    PSGetAllFiles = new PreparedStatement(
+        {
+            name: "PSGetAllFiles",
+            text: "SELECT * FROM files WHERE live = true ORDER BY size ASC"
         }
     );
 
@@ -228,10 +270,25 @@ class MirageDB
         }
     );
 
+    PSGetAllFilesShort = new PreparedStatement(
+        {
+            name: "PSGetAllFilesShort",
+            text: "SELECT name, size, hash FROM files WHERE live = true"
+        }
+    );
+    
+
     PSGetAllImagesMark = new PreparedStatement(
         {
             name: "PSGetAllImagesMark",
             text: "SELECT imageid, path FROM images WHERE live = true"
+        }
+    );
+
+    PSGetAllFilesMark = new PreparedStatement(
+        {
+            name: "PSGetAllFilesMark",
+            text: "SELECT fileid, path FROM files WHERE live = true"
         }
     );
 
@@ -242,12 +299,26 @@ class MirageDB
         }
     );
 
+    PSMarkFileDeletedByID = new PreparedStatement(
+        {
+            name: "PSMarkFileDeletedByID",
+            text: "UPDATE files SET live = false::boolean WHERE fileid = $1"
+        }
+    );
+
     PSMarkImageDeletedByHash = new PreparedStatement(
         {
             name: "PSMarkImageDeletedByHash",
             text: "UPDATE images SET live = false::boolean WHERE normalhash = $1"
         }
     );
+
+    PSMarkFileDeletedByHash = new PreparedStatement(
+        {
+            name: "PSMarkFileDeletedByHash",
+            text: "UPDATE files SET live = false::boolean WHERE hash = $1"
+        }
+    );    
 
     PSMarkImageLiveByID = new PreparedStatement(
         {
@@ -321,6 +392,13 @@ class MirageDB
         }
     );
 
+    PSGetUntaggedFilesSortedLimited = new PreparedStatement(
+        {
+            name: "PSGetUntaggedFilesSortedLimited",
+            text: "SELECT size, hash, name FROM files WHERE live = true AND tags = '' ORDER BY name ASC LIMIT 250"
+        }
+    );
+
     PSGetTagList = new PreparedStatement(
         {
             name: "PSGetTagList",
@@ -356,7 +434,7 @@ class MirageDB
             await this.pgdb.query("DROP TABLE IF EXISTS auth;");
             console.log("[WARN] Dropped Table 'auth'");
             await this.pgdb.query("DROP TABLE IF EXISTS images;");
-            console.log("[WARN] Dropped Table 'auth'");
+            console.log("[WARN] Dropped Table 'images'");
 
         }
         catch (Err)
@@ -446,6 +524,28 @@ class MirageDB
             CONSTRAINT user_board_key PRIMARY KEY (boardid, ownerid)\
         ); \
     ");
+    }
+
+    async InitialiseFiles()
+    {
+        await this.pgdb.query("DROP TABLE IF EXISTS files;");
+
+        await this.pgdb.query("\
+            CREATE TABLE IF NOT EXISTS files \
+            ( \
+                fileid INT NOT NULL PRIMARY KEY GENERATED ALWAYS AS IDENTITY, \
+                hash BYTEA UNIQUE, \
+                size BIGINT, \
+                path TEXT, \
+                name TEXT, \
+                tags TSVECTOR, \
+                live BOOLEAN DEFAULT TRUE NOT NULL \
+            ); \
+        ");
+
+        await this.pgdb.query("\
+            CREATE INDEX IF NOT EXISTS ind_tag_files ON files USING GIN (tags); \
+        ");
     }
 
     async GetAuthByUsername(username: string)
@@ -619,7 +719,61 @@ class MirageDB
         return this.pgdb.manyOrNone(this.PSGetUntaggedImagesSortedLimited, []);
     }
 
+    async GetUntaggedFilesSortedLimited()
+    {
+        return this.pgdb.manyOrNone(this.PSGetUntaggedFilesSortedLimited, []);
+    }
+
+    async GetFileByHash(hash: Buffer)
+    {
+        return this.pgdb.oneOrNone(this.PSGetFileByHash, [hash]);
+    }
+
+    async GetFilePathByHash(hash: Buffer)
+    {
+        return this.pgdb.oneOrNone(this.PSGetFilePathByHash, [hash]);
+    }
+
+    async MarkFileDeletedHash(hash: Buffer)
+    {
+        return this.pgdb.none(this.PSMarkFileDeletedByHash, [hash]);
+    }
     
+    async GetAllFiles()
+    {
+        return this.pgdb.manyOrNone(this.PSGetAllFiles, []);
+    }
+
+    async GetAllFilesMark()
+    {
+        return this.pgdb.manyOrNone(this.PSGetAllFilesMark, []);
+    }
+
+    async MarkFileDeleted(imageid:number)
+    {
+        return this.pgdb.none(this.PSMarkImageDeletedByID, [imageid]);
+    }    
+
+    async GetFileTagsByHash(hash: Buffer)
+    {
+        return this.pgdb.oneOrNone(this.PSGetFileTagsByHash, [hash]);
+    }
+
+    async GetFileByTagShort(tags: string)
+    {
+        return this.pgdb.manyOrNone(this.PSGetFileByTagShort, [tags.toLowerCase()]);
+    }
+
+    async GetAllFilesShort()
+    {
+        return this.pgdb.manyOrNone(this.PSGetAllFilesShort, []);
+    }
+
+    async UpdateFileTagsByHash(hash: Buffer, tags: string)
+    {
+        return this.pgdb.none(this.PSUpdateFileTagsByHash, [hash, tags]);
+    }
+
 
     async GetTagList()
     {
@@ -637,6 +791,30 @@ class MirageDB
                 width,
                 height,
                 loadPath,
+                tags
+            ]
+            );
+          
+
+            return true;
+        }
+        catch (Exception)
+        {
+            console.log(Exception);
+            return false;
+        }
+    }
+
+    async AddFile(hash: Buffer, size: number, loadPath: string, name: string, tags: string)
+    {
+        console.log(hash, size, loadPath, tags);
+        try
+        {            
+            let res = await this.pgdb.one("INSERT INTO files (hash, size, path, name, tags) VALUES ($1, $2, $3, $4, $5) RETURNING fileid;", [
+                hash,
+                size,
+                loadPath,
+                name,
                 tags
             ]
             );

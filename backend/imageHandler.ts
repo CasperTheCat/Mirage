@@ -4,12 +4,13 @@ import crypto from "crypto";
 import {existsSync, createReadStream} from 'fs';
 import type { MirageDB } from './db.js';
 import {TagArrayToString} from './tagHandler.js';
-import { mkdir, readdir, readFile, stat, unlink } from "fs/promises";
+import { mkdir, readdir, readFile, stat } from "fs/promises";
 import ffmpeg from "fluent-ffmpeg";
 import path from 'path';
+import { ImageExtensions } from './imageExtensions.js';
 
 const videoTypes = ['.mkv', '.avi', '.mp4', '.webm', '.mov', ".ts"];
-
+const dataTypes = ['.txt', '.pdf', '.md', '.mp3'];
 // async function IngestImageFromBuffer(image: Buffer, db: MirageDB)
 // {
 //     let imageBuffer: Sharp = sharp(image);
@@ -73,7 +74,7 @@ async function HashFile(path: string)
     }
 }
 
-function GetPrelimTags(rlpath)
+function GetPrelimTags(rlpath, useTypeTags = true)
 {
     // Get prelimary tags
     const tagList = rlpath.split("/").slice(0, -1);
@@ -83,6 +84,20 @@ function GetPrelimTags(rlpath)
     {
         cleanTags.push(SanitiseTag(uncleanTag))
     }
+
+    if (useTypeTags)
+    {
+        let extension = path.extname(rlpath);
+        if (videoTypes.indexOf(extension.toLowerCase()) >= 0)
+        {
+            cleanTags.push("Video");
+        }
+        else
+        {
+            cleanTags.push("Image");
+        }
+    }
+
 
     return cleanTags;
 }
@@ -103,6 +118,20 @@ async function DiscardOrMark(root: string, db: MirageDB)
             {
                 console.log(`[INFO] File Missing at ID ${image["imageid"]}`);
                 db.MarkImageDeleted(image["imageid"]);
+            }
+        }
+
+        let fileList = await db.GetAllFilesMark();
+
+        // Check
+        for (let FileItem of fileList)
+        {
+            let filePath = path.resolve(root, FileItem["path"]);
+
+            if(!existsSync(filePath))
+            {
+                console.log(`[INFO] File Missing at ID ${FileItem["fileid"]}`);
+                db.MarkFileDeleted(FileItem["fileid"]);
             }
         }
     }
@@ -191,17 +220,42 @@ async function CheckFolder(check: string, db: MirageDB, root: string, cache: str
                     }
                     else
                     {
-                        let extension = path.extname(itemPath);
-                        
-                        if (videoTypes.indexOf(extension.toLowerCase()) >= 0)
+                        // Check the item isn't in files
+                        let fileResult = await db.GetFileByHash(imageHash);
+                        if(fileResult)
                         {
-                            console.log(`[INFO] Ingesting Video ${rlpath}`);
-                            await IngestVideo(root, rlpath, imageHash, cache, db, prelimTags);
+                            // Check the path
+                            if (fileResult["path"] !== rlpath)
+                            {
+                                //db.UpdateImageLocationByID(result["imageid"], rlpath);
+                                console.log(`[INFO] Missing file at ${rlpath}. Updated Location`);
+                            }
+                            else if (!fileResult["live"])
+                            {
+                                // We found a file that has been marked as deleted
+                                console.log(`[INFO] Found file at ${rlpath}. Setting file live.`);
+                                //db.MarkImageLive(result["imageid"]);
+                            }
                         }
                         else
                         {
-                            console.log(`[INFO] Ingesting Image ${rlpath}`);
-                            await IngestImage(root, rlpath, imageHash, cache, db, prelimTags);
+                            let extension = path.extname(itemPath);
+                        
+                            if (videoTypes.indexOf(extension.toLowerCase()) >= 0)
+                            {
+                                console.log(`[INFO] Ingesting Video ${rlpath}`);
+                                await IngestVideo(root, rlpath, imageHash, cache, db, prelimTags);
+                            }
+                            else if (ImageExtensions.indexOf(extension.toLowerCase()) < 0)
+                            {
+                                console.log(`[INFO] Ingesting File ${rlpath}`);
+                                await IngestFile(root, rlpath, imageHash, cache, db, prelimTags);
+                            }
+                            else
+                            {
+                                console.log(`[INFO] Ingesting Image ${rlpath}`);
+                                await IngestImage(root, rlpath, imageHash, cache, db, prelimTags);
+                            }
                         }
                     }
 
@@ -216,6 +270,21 @@ async function CheckFolder(check: string, db: MirageDB, root: string, cache: str
             catch (Exception)
             {
                 console.log(`[INFO] Exception ${Exception}`);
+                // Adding to files rather than image mirage
+
+                try
+                {
+                    // Check that this file exists in the DB
+                    const itemPath = path.resolve(check, item.name);
+                    let rlpath = path.relative(root, itemPath);
+                    let imageHash = await HashFile(itemPath);
+
+
+                }
+                catch (Ex2)
+                {
+
+                }
             }
         }
     }
@@ -411,6 +480,18 @@ async function IngestImage(root: string, relpath: string, normalhash: Buffer, ca
     //await GenerateThumbnail(imageBuffer, cache, normalhash.toString("hex"));
 
     db.AddImage(normalhash, Buffer.from(""), width, height, relpath, prelimTags);
+}
+
+async function IngestFile(root: string, relpath: string, normalhash: Buffer, cache: string, db: MirageDB, prelimTags: string = "")
+{
+    const loadPath = path.resolve(root, relpath);
+
+    const fst = await stat(loadPath);
+    const fname = path.basename(loadPath);
+
+    //await GenerateThumbnail(imageBuffer, cache, normalhash.toString("hex"));
+
+    db.AddFile(normalhash, fst.size, relpath, fname, prelimTags);
 }
 
 async function IngestImageFromPath(root: string, relpath: string, db: MirageDB)

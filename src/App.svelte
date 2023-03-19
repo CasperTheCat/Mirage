@@ -32,7 +32,9 @@
 	countImages = 0;
 
 	let photos = [];
+	let files = [];
 	let loadedPhotoCount = 0;
+	let loadedFileCounts = 0;
 	let SelectedBoardName = "";
 	let SelectedBoardID = 0; // Invalid. ID starts at 1
 	let AddToBoardID = 0; // Invalid. ID starts at 1
@@ -51,6 +53,9 @@
 	const EState_TagUntagView = 4;
 	const EState_TagManView = 5;
 	const EState_SpeedTagView = 6;
+	const EState_FileView = 7;
+	const EState_FileSearch = 8;
+	const EState_FileTagger = 9;
 
 	const EStateModal_Normal = 0;
 	const EStateModal_Confirm = 1;
@@ -150,13 +155,27 @@
 		try
 		{
 			//console.log(event.detail.hash);
-			let fetchable = await fetch('/api/image/tags');
-			let blob: JSON = await fetchable.json();
-
-			if ("tags" in blob)
+			if(IsFileMode())
 			{
-				globalAllTags = blob["tags"];
-				console.log(globalAllTags);
+				// let fetchable = await fetch('/api/file/tags');
+				// let blob: JSON = await fetchable.json();
+
+				// if ("tags" in blob)
+				// {
+				// 	globalAllTags = blob["tags"];
+				// 	//console.log(globalAllTags);
+				// }
+			}
+			else
+			{
+				let fetchable = await fetch('/api/image/tags');
+				let blob: JSON = await fetchable.json();
+
+				if ("tags" in blob)
+				{
+					globalAllTags = blob["tags"];
+					//console.log(globalAllTags);
+				}
 			}
 		}
 		catch (Exception)
@@ -281,20 +300,43 @@
 		}
 	}
 
+	function IsFileMode()
+	{
+		return (PageState === EState_FileView || PageState === EState_FileSearch || PageState === EState_FileTagger);
+	}
+
 	async function HandleSuggestTags()
 	{
 		try
 		{
-			let fetchable = await fetch(`/api/image/meta/${listedHash}/suggested`);
-			let blob: JSON = await fetchable.json();
-
-			if ("suggested" in blob)
+			if(IsFileMode())
 			{
-				editTagString = blob["suggested"].join("\n");
+				let fetchable = await fetch(`/api/file/meta/${listedHash}/suggested`);
+				let blob: JSON = await fetchable.json();
+
+				if ("suggested" in blob)
+				{
+					editTagString = blob["suggested"].join("\n");
+					console.log(editTagString);
+				}
+				else
+				{
+					console.log("?");
+				}
 			}
 			else
 			{
-				console.log("?");
+				let fetchable = await fetch(`/api/image/meta/${listedHash}/suggested`);
+				let blob: JSON = await fetchable.json();
+
+				if ("suggested" in blob)
+				{
+					editTagString = blob["suggested"].join("\n");
+				}
+				else
+				{
+					console.log("?");
+				}
 			}
 		}
 		catch (Exception)
@@ -322,14 +364,28 @@
 			// Remove nulls. Backend should do this too, but why not make it easier
 			tgs = tgs.filter(e=>e);
 
-			let fetchable = await fetch(`/api/image/meta/${listedHash}/tag`,
+			if (IsFileMode())
 			{
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json;charset=utf-8'
-				},
-  				body: JSON.stringify(tgs)
-			});
+				let fetchable = await fetch(`/api/file/meta/${listedHash}/tag`,
+				{
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json;charset=utf-8'
+					},
+					body: JSON.stringify(tgs)
+				});
+			}
+			else
+			{
+				let fetchable = await fetch(`/api/image/meta/${listedHash}/tag`,
+				{
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json;charset=utf-8'
+					},
+					body: JSON.stringify(tgs)
+				});
+			}
 			
 			showModal = false;
 			UpdateTagList();
@@ -601,6 +657,54 @@
 		}
 	}
 
+	async function HandleFileSummon(event)
+	{
+		try
+		{
+			//SelectedBoardName
+			// Get Images
+			console.log("HANDLEFILESUMMON");
+			console.log(event.detail)
+			const tag = event.detail.tag;
+			if ("hash" in tag && "name" in tag)
+			{
+				//console.log(event.detail.hash);
+				let fetchable = await fetch(`/api/file/meta/${event.detail.tag.hash}/tag`);
+				let blob: JSON = await fetchable.json();
+
+				console.log(blob);
+
+				if ("tags" in blob)
+				{
+					listedTags = blob["tags"];
+					console.log(listedTags);
+				}			
+
+				listedModalX = event.detail.x;// - (innerHeight / 2) ;
+				listedModalY = event.detail.y;// - (innerHeight / 2);
+
+				editTagString = listedTags.join("\n");
+				listedHash = event.detail.tag.hash;
+				listedShortHash = listedHash.slice(0, 8);
+
+				ModalState = EStateModal_Normal;
+				showModal = true;
+				ForcedScrollToModal();
+			}
+
+			
+
+
+
+		}
+		catch (Exception)
+		{
+			console.log("Failed to summon tag panel");
+			showModal = false;
+			console.log(Exception);
+		}
+	}
+
 	async function HandleSelectBoard(event)
 	{
 		try
@@ -620,7 +724,9 @@
 		}
 		catch (Exception)
 		{
-
+			console.log("Failed to summon tag panel");
+			showModal = false;
+			console.log(Exception);
 		}
 	}
 
@@ -650,7 +756,7 @@
 			if(tagCounts.length > 0)
 			{
 				selectedTagCount = tagCounts[0];
-				console.log(selectedTagCount);
+				//console.log(selectedTagCount);
 			}
 
 			if (selectedTagControl !== undefined)
@@ -817,6 +923,38 @@
 		}
 	}
 
+	async function ExecuteFileSearch() 
+	{
+		if (TagSearchString === "")
+		{
+			bShouldDisplay = false;
+			loadedPhotoCount = 0;
+			return;
+		}
+
+		try
+		{
+			if (IsFileMode())
+			{
+				await LoadFiles(`/api/file/search/fuzzy/${TagSearchString}`);
+			}
+			else
+			{
+				console.log("State is bad?");
+				return;
+			}
+		}
+		catch (Exception)
+		{
+			//throw Exception;
+			console.log("Bad Search");
+		}
+		finally
+		{
+			bShouldDisplay = true;
+		}
+	}
+
 	async function SwitchToSearchView()
 	{
 		try
@@ -904,6 +1042,43 @@
 	async function SwitchToBoardManSelect()
 	{
 		
+	}
+
+	async function SwitchToFileViewer()
+	{
+		try
+		{
+			bShouldDisplay = false;
+			await LoadFiles("/api/search/file/restricted");
+			PageState = EState_FileView;
+		}
+		catch (Exception)
+		{
+			PageState = EState_FrontPage;
+		}
+		finally
+		{
+			ResetSearchState();
+			showModal = false;
+		}
+	}
+
+	async function SwitchToFileSearch()
+	{
+		try
+		{
+			bShouldDisplay = false;
+			PageState = EState_FileSearch;
+		}
+		catch (Exception)
+		{
+			PageState = EState_FrontPage;
+		}
+		finally
+		{
+			ResetSearchState();
+			showModal = false;
+		}
 	}
 
 	async function SwitchToSpeedTagger()
@@ -1154,6 +1329,44 @@
 		}
 	}
 
+	async function LoadFiles(path: string, override: boolean = false)
+	{
+		try
+		{
+			let fetchable = await fetch(path);
+			let blob: JSON = await fetchable.json();
+
+			console.log(blob);
+
+			if ("files" in blob)
+			{
+				console.log(blob["files"]);
+				files = blob["files"];
+				loadedFileCounts = files.length;
+				console.log(files);
+			}
+
+			// Below is optimal
+			//photos.sort((a,b) => {
+			//	let r1 = a["height"] / a["width"];
+			//	let r2 = b["height"] / b["width"];
+			//	return r2 - r1;
+			//});
+
+			// if (photos.length > 20)
+			// {
+			// 	photos = photos.slice(0, 20);
+			// }
+
+			// Update
+			//await updateColumns(true);
+		}
+		catch (Exception)
+		{
+			throw Exception;
+		}
+	}
+
 	// // Also, fetch temporary images
 	// onMount(async () => {
 	// 	try 
@@ -1188,6 +1401,8 @@
 			/Untagged
 			{:else if PageState === EState_TagManView}
 			/TagMan
+			{:else if PageState === EState_FileView}
+			/FileViewer
 			{/if}
 			
 		</h1>
@@ -1198,7 +1413,7 @@
 	</div>
 </nav>
 
-<main style={PageState === EState_BoardSelect || PageState === EState_TagManView || PageState === EState_FrontPage ? "padding-top: 64px;" : "padding-top: 54px;"}>
+<main style={PageState === EState_BoardSelect || PageState === EState_FileView || PageState === EState_TagManView || PageState === EState_FrontPage ? "padding-top: 64px;" : "padding-top: 54px;"}>
 	<!-- <p>Welcome to the Mirage Moodboard</p>
 	<br/>
 	{#if countImages > 0}
@@ -1240,6 +1455,17 @@
 				<br>
 				<br>
 			</div>
+		{:else if PageState === EState_FileSearch}
+			<div>
+				<br>
+				<h2>File Search View</h2>
+				<br>
+				<input bind:value={TagSearchString} placeholder="Query" on:input={HandleSearchInput} on:keydown={HandleSearchKey}>
+				<input type="submit" value="Execute" on:click={ExecuteFileSearch}/>
+				<!-- <input  value="Submit"> -->
+				<br>
+				<br>
+			</div>
 		{/if}
 
 		{#if (
@@ -1263,13 +1489,29 @@
 			{:else if bShouldDisplay}
 				<p>Nothing to display!</p>
 			{/if}
+		{:else if PageState === EState_FileSearch}
+			{#if (bShouldDisplay && loadedFileCounts > 0)}
+				<div class="menu">
+					{#each files as col}
+						<Card name="{col.name}" tag={col} fileSize={col.size} height=256 on:summon={HandleFileSummon}/>
+					{/each}
+				</div>
+			{:else if bShouldDisplay}
+				<p>Nothing to display!</p>
+			{/if}
 		{:else if PageState === EState_BoardSelect}
 			<div class="menu">
 				{#each userBoards as col}
 					<Card name="{col.boardname}" tag={col} on:summon={HandleSelectBoard}/>
 				{/each}
 			</div>
-		{:else if PageState === EState_TagManView}
+		{:else if PageState === EState_FileView }
+			<div class="menu">
+				{#each files as col}
+					<Card name="{col.name}" tag={col} fileSize={col.size} height=256 on:summon={HandleFileSummon}/>
+				{/each}
+			</div>
+		{:else if PageState === EState_TagManView && globalAllTags !== null}
 			<div class="menu">
 				{#each globalAllTags as col}
 					<Card name="{col}" tag={col} on:summon={HandleTagControlSummon}/>
@@ -1284,6 +1526,8 @@
 				<Card on:summon={SwitchToTagManSelect} name="Tag Management"/>
 				<Card on:summon={SwitchToBoardManSelect} name="Board Management"/>
 				<Card on:summon={SwitchToSpeedTagger} name="Speed Tagger"/>
+				<Card on:summon={SwitchToFileViewer} name="Limited Files"/>
+				<Card on:summon={SwitchToFileSearch} name="File Search"/>				
 			</div>
 		{/if}
 	{/if}
@@ -1298,7 +1542,7 @@
 			<button on:click={HandleCancelledAction}>Cancel</button>
 			<button on:click={HandleConfirmedAction}>Proceed</button>
 		</Modal>
-	{:else if PageState === EState_TagManView}
+	{:else if PageState === EState_TagManView }
 		<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>
 			<h2 slot="header">
 				Selected Tag: {selectedTagControl}
@@ -1312,12 +1556,19 @@
 			<button on:click={HandleWantDeleteTag}>Delete Tag</button>
 			<button on:click={HandleWantRenameTag}>Rename Tag</button>
 		</Modal>
-	{:else}
+	<!-- {:else if PageState === EState_FileView}
 		<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>
+			<h2 slot="header">
+				dd
+			</h2>
+		</Modal> -->
+	{:else}
+		<Modal offsetY={IsFileMode() ? listedModalY + 64 : listedModalY} on:close={HandleImageDesummon}>
 			<h2 slot="header">
 				Tagging {listedShortHash}
 			</h2>
 			<!-- <input bind:value={SelectedBoardID} type="number" min="1"> -->
+			{#if !IsFileMode()}
 			<span class="centering">
 			<select bind:value={AddToBoardID}>
 				{#each userBoards as brds}
@@ -1327,12 +1578,11 @@
 			<button on:click={HandleAddToBoard}>Add to Board</button>
 			<button on:click={HandleRemoveFromBoard}>Remove</button>
 			</span>
+			{/if}
 			<textarea bind:value={editTagString} rows="15"></textarea>
 			<button on:click={HandleSubmitNewTags}>Save Tags</button>
 			<button on:click={HandleSuggestTags}>Suggest</button>
-			<button on:click={HandleViewOriginal}>View</button>
-
-			
+			<button on:click={HandleViewOriginal}>View</button>			
 		</Modal>
 	{/if}
 {/if}
