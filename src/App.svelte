@@ -20,8 +20,10 @@
 	let listedHash: string = "";
 	let listedShortHash: string = "";
 	let selectedTagControl: string = undefined;
+	let selectedBoardControl: number = undefined;
 	let selectedTagCount: number = 0;
 	let selectedNewTagName: string = undefined;
+	let selectedNewBoardName: string = undefined;
 	let confirmationAction: Function = undefined;
 	//let oldPageState: number = undefined;
 
@@ -56,6 +58,7 @@
 	const EState_FileView = 7;
 	const EState_FileSearch = 8;
 	const EState_FileTagger = 9;
+	const EState_BoardManView = 10;
 
 	const EStateModal_Normal = 0;
 	const EStateModal_Confirm = 1;
@@ -437,6 +440,47 @@
 		ModalState = EStateModal_Confirm;
 	}
 
+	
+	async function HandleWantDeleteBoard()
+	{
+		// Store function
+		confirmationAction = HandleDeleteBoard;
+		//oldPageState = PageState;
+		//PageState = EState_Confirm;
+		ShowConfirmModal();
+	}
+
+	async function HandleDeleteBoard()
+	{
+		try
+		{
+			if (selectedBoardControl !== undefined)
+			{
+				let fetchable = await fetch('/api/board/delete',
+				{
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json;charset=utf-8'
+					},
+					body: JSON.stringify(
+						[{
+							"boardid": selectedBoardControl
+						}])
+				});
+				
+				showModal = false;
+			}
+		}
+		catch (Exception)
+		{
+
+		}
+		finally
+		{
+			LoadBoards();
+		}
+	}
+
 	async function HandleWantDeleteTag()
 	{
 		// Store function
@@ -775,6 +819,43 @@
 		}
 	}
 
+	async function HandleBoardControlSummon(event)
+	{
+		try
+		{
+			listedModalX = event.detail.x;
+			listedModalY = event.detail.y;
+
+			const tag = event.detail.tag;
+			if ("boardid" in tag && "boardname" in tag)
+			{
+				SelectedBoardName = tag.boardname;
+				selectedBoardControl = tag.boardid;
+			}
+
+			// selectedTagControl = event.detail.tag;
+			// let tagCounts = await GetTagCount([event.detail.tag]);
+			// if(tagCounts.length > 0)
+			// {
+			// 	selectedTagCount = tagCounts[0];
+			// 	//console.log(selectedTagCount);
+			// }
+
+
+			ModalState = EStateModal_Normal;
+			showModal = true;
+			ForcedScrollToModal();
+
+		}
+		catch (Exception)
+		{
+			console.log("Failed to summon board panel");
+			showModal = false;
+			console.log(Exception);
+		}
+	}
+
+
 	async function HandleImageDesummon(event) 
 	{
 		listedTags = [];
@@ -1041,7 +1122,21 @@
 
 	async function SwitchToBoardManSelect()
 	{
-		
+		try
+		{
+			// Load Boards
+			await LoadBoards();
+			PageState = EState_BoardManView;
+		}
+		catch (Exception)
+		{
+			PageState = EState_FrontPage;
+		}
+		finally
+		{
+			ResetSearchState();
+			showModal = false;
+		}
 	}
 
 	async function SwitchToFileViewer()
@@ -1403,6 +1498,8 @@
 			/TagMan
 			{:else if PageState === EState_FileView}
 			/FileViewer
+			{:else if PageState === EState_BoardManView}
+			/BoardManager
 			{/if}
 			
 		</h1>
@@ -1413,7 +1510,7 @@
 	</div>
 </nav>
 
-<main style={PageState === EState_BoardSelect || PageState === EState_FileView || PageState === EState_TagManView || PageState === EState_FrontPage ? "padding-top: 64px;" : "padding-top: 54px;"}>
+<main style={PageState === EState_BoardSelect || PageState === EState_FileView || PageState === EState_BoardManView ||  PageState === EState_TagManView || PageState === EState_FrontPage ? "padding-top: 64px;" : "padding-top: 54px;"}>
 	<!-- <p>Welcome to the Mirage Moodboard</p>
 	<br/>
 	{#if countImages > 0}
@@ -1517,6 +1614,12 @@
 					<Card name="{col}" tag={col} on:summon={HandleTagControlSummon}/>
 				{/each}
 			</div>
+		{:else if PageState === EState_BoardManView}
+			<div class="menu">
+				{#each userBoards as col}
+					<Card name="{col.boardname}" tag={col} on:summon={HandleBoardControlSummon}/>
+				{/each}
+			</div>
 		{:else}
 			<div class="menu">
 				<Card on:summon={SwitchToBoardSelect} name="Boards"/>
@@ -1534,13 +1637,23 @@
 </main>
 
 {#if showModal}
-	{#if PageState === EState_TagManView && ModalState === EStateModal_Confirm}
+	{#if (PageState === EState_BoardManView || PageState === EState_TagManView) && ModalState === EStateModal_Confirm}
 		<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>
 			<h2 slot="header">
 				Confirm?
 			</h2>
 			<button on:click={HandleCancelledAction}>Cancel</button>
 			<button on:click={HandleConfirmedAction}>Proceed</button>
+		</Modal>
+	{:else if PageState === EState_BoardManView }
+		<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>
+			<h2 slot="header">
+				Selected Board: {SelectedBoardName}
+			</h2>
+			<textarea bind:value={selectedNewBoardName} rows="1"></textarea>
+			<br>
+			<button on:click={HandleWantDeleteBoard}>Delete Tag</button>
+			<!-- <button on:click={HandleWantRenameBoard}>Rename Tag</button> -->
 		</Modal>
 	{:else if PageState === EState_TagManView }
 		<Modal offsetY={listedModalY} on:close={HandleImageDesummon}>

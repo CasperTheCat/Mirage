@@ -17,6 +17,7 @@ async function InitDB(db: MirageDB, shouldDestroy: boolean = false)
         await db.InitialiseBoards();
         await db.InitialiseImages();
         await db.InitialiseFiles();
+        await db.InitialiseSharedBoards();
     }
     catch (Err)
     {

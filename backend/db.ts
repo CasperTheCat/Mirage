@@ -129,6 +129,13 @@ class MirageDB
         }
     );
 
+    PSGetSharedBoardByHash = new PreparedStatement(
+        {
+            name: "PSGetSharedBoardByHash",
+            text: "SELECT boardid FROM shared_boards WHERE shareuuid = $1"
+        }
+    );
+
     PSGetImageByTag = new PreparedStatement(
         {
             name: "PSGetImageByTag",
@@ -528,7 +535,8 @@ class MirageDB
 
     async InitialiseFiles()
     {
-        await this.pgdb.query("DROP TABLE IF EXISTS files;");
+        // TODO REMOVE
+        //await this.pgdb.query("DROP TABLE IF EXISTS files;");
 
         await this.pgdb.query("\
             CREATE TABLE IF NOT EXISTS files \
@@ -545,6 +553,20 @@ class MirageDB
 
         await this.pgdb.query("\
             CREATE INDEX IF NOT EXISTS ind_tag_files ON files USING GIN (tags); \
+        ");
+    }
+
+    async InitialiseSharedBoards()
+    {
+        // TODO REMOVE
+        //await this.pgdb.query("DROP TABLE IF EXISTS shared_boards;");
+
+        await this.pgdb.query("CREATE TABLE IF NOT EXISTS shared_boards \
+            ( \
+                boardid INT REFERENCES boards (boardid) ON UPDATE CASCADE ON DELETE CASCADE, \
+                shareuuid BYTEA UNIQUE, \
+                CONSTRAINT shared_board_key PRIMARY KEY (boardid)\
+            ); \
         ");
     }
 
@@ -774,6 +796,11 @@ class MirageDB
         return this.pgdb.none(this.PSUpdateFileTagsByHash, [hash, tags]);
     }
 
+    async GetSharedBoardByHash(hash: Buffer)
+    {
+        return this.pgdb.oneOrNone(this.PSGetSharedBoardByHash, [hash]);
+    }
+
 
     async GetTagList()
     {
@@ -843,6 +870,27 @@ class MirageDB
                 userid
             ]
             );         
+
+            return true;
+        }
+        catch (Exception)
+        {
+            console.log(Exception);
+            return false;
+        }
+    }
+
+    async RemoveBoard(userid:number, boardid: number)
+    {
+        try
+        {
+            // Affirm this board is *actually* owned by the right person
+            await this.pgdb.none("DELETE FROM boards USING user_board WHERE user_board.boardid = boards.boardid AND boards.boardid = $1 AND user_board.ownerid = $2;",
+            [
+                boardid,
+                userid
+            ]
+            );    
 
             return true;
         }

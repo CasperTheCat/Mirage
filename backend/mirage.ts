@@ -172,6 +172,8 @@ async function entry()
     );
 
     app.use('/static', express.static('public'))
+
+    // Main Route
     app.get('/', (req, res) => 
     {
         //console.log(mirageDB.GetUserByUID(req.user.userid));
@@ -681,25 +683,33 @@ async function entry()
                 let y = Buffer.from(req.params.id, 'hex');
                 let x = await mirageDB.GetImagePathByHash(y);
                 
-                if (x)
+                try
                 {
-                    let loadPath = x["path"];
+                    if (x)
+                    {
+                        let loadPath = x["path"];
 
-                    res.sendFile(path.resolve(__imagePath, loadPath));
+                        res.sendFile(path.resolve(__imagePath, loadPath));
+                    }
+                    else
+                    {
+                        // Mark deleted
+                        res.status(404).send();
+                    }
                 }
-                else
+                catch (Exception)
                 {
-                    // Mark deleted
-                    res.status(404).send();
-
                     // Mark
                     console.log(`[WARN] Marking ${y} as dead.`)
                     mirageDB.MarkImageDeletedHash(y);
+
+                    // Mark deleted
+                    res.status(404).send();
                 }
             }
             catch (Exception)
             {
-                console.log(Exception);
+                console.log(Exception);            
                 res.status(500).send();
             }
         }
@@ -1264,6 +1274,31 @@ async function entry()
                 {
                     const userid: any = req.user;
                     await mirageDB.AddBoard(userid, entry);
+                }
+                
+                // Convert from hash to UI
+
+                res.status(200).send();
+
+            }
+            catch (Exception)
+            {
+                console.log(Exception);
+                res.status(500).send("{ \"code\": 0, \"reason\": \"Exception\" }");
+            }
+        }
+    );
+
+    app.post('/api/board/delete', bodyParser.json({ limit: '100mb', strict: true }), ensureLoggedIn(), 
+        async (req, res) => 
+        {
+            try
+            {
+                let bodyjson: JSON[] = req.body;
+                for (let entry of bodyjson)
+                {
+                    const userid: any = req.user;
+                    await mirageDB.RemoveBoard(userid, entry["boardid"]);
                 }
                 
                 // Convert from hash to UI
