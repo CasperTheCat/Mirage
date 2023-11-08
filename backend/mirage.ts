@@ -840,15 +840,18 @@ async function entry()
                         let y = Buffer.from(hashes[i], 'hex');
                         let x = await mirageDB.GetImageByHash(y);
 
-                        let z = {
-                            "width": x["width"],
-                            "height": x["height"],
-                            "hash": `${x["normalhash"].toString('hex')}`,
-                            "path": x["path"],
-                            "perc": x["perceptualHash"]
-                        };
-        
-                        results.push(z);
+                        if (x)
+                        {
+                            let z = {
+                                "width": x["width"],
+                                "height": x["height"],
+                                "hash": `${x["normalhash"].toString('hex')}`,
+                                "path": x["path"],
+                                "perc": x["perceptualHash"]
+                            };
+            
+                            results.push(z);
+                        }
                     }
                 }
 
@@ -867,16 +870,19 @@ async function entry()
                         let y = Buffer.from(hashes[i], 'hex');
                         let x = await mirageDB.GetImageByHash(y);
 
-                        let z = {
-                            "width": x["width"],
-                            "height": x["height"],
-                            "hash": `${x["normalhash"].toString('hex')}`,
-                            "path": x["path"],
-                            "perc": x["perceptualHash"],
-                            "tags": x["tags"]
-                        };
-        
-                        results.push(z);
+                        if (x)
+                        {
+                            let z = {
+                                "width": x["width"],
+                                "height": x["height"],
+                                "hash": `${x["normalhash"].toString('hex')}`,
+                                "path": x["path"],
+                                "perc": x["perceptualHash"],
+                                "tags": x["tags"]
+                            };
+            
+                            results.push(z);
+                        }
                     }
                 }
 

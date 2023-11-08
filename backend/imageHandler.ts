@@ -9,7 +9,7 @@ import ffmpeg from "fluent-ffmpeg";
 import path from 'path';
 import { ImageExtensions } from './imageExtensions.js';
 
-const videoTypes = ['.mkv', '.avi', '.mp4', '.webm', '.mov', ".ts"];
+const videoTypes = ['.mkv', '.avi', '.mp4', '.webm', '.mov', ".ts", ".m4v"];
 const dataTypes = ['.txt', '.pdf', '.md', '.mp3'];
 // async function IngestImageFromBuffer(image: Buffer, db: MirageDB)
 // {
